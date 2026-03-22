@@ -1,4 +1,4 @@
-# User Stories — TinyCopro V1
+# User Stories — TinyCopro V1.1
 
 ## Epic 1 : Inscription & Authentification
 
@@ -47,19 +47,23 @@
 - Le créateur devient automatiquement **gestionnaire** de la copro (rôle attribué à la création, pas à l'inscription)
 - Le gestionnaire peut avoir 0 millième (s'il est uniquement gestionnaire et pas copropriétaire)
 - Champ millièmes optionnel à la création (0 par défaut)
-- Un code d'invitation unique est généré automatiquement
+- ~~Un code d'invitation unique est généré automatiquement~~ **SUPPRIME (V1.1)** — remplacé par Epic INV (invitations personnalisées créées séparément via US-INV-1)
 - La copro apparaît dans "Mes copros"
 
-### US-2.2 : Rejoindre une copropriété
-**En tant que** copropriétaire,
-**je veux** rejoindre une copropriété avec un code d'invitation,
-**afin de** voir mes charges et effectuer mes paiements.
+### ~~US-2.2 : Rejoindre une copropriété~~ DEPRECATED (V1.1)
 
-**Critères d'acceptation :**
-- Saisir le code copro
-- Renseigner ses millièmes (tantièmes)
-- Le gestionnaire voit la demande et peut valider/refuser
-- Une fois validé, le copropriétaire a accès à la copro
+> **Remplacée par** US-INV-5 (inscription via lien d'invitation) et US-INV-6 (adhésion avec remplacement de l'alias).
+> L'ancien flux (saisie libre du code + INSERT nouveau membre) est remplacé par un UPDATE du membre placeholder créé par le gestionnaire.
+
+~~**En tant que** copropriétaire,
+**je veux** rejoindre une copropriété avec un code d'invitation,
+**afin de** voir mes charges et effectuer mes paiements.~~
+
+~~**Critères d'acceptation :**~~
+- ~~Saisir le code copro~~
+- ~~Renseigner ses millièmes (tantièmes)~~
+- ~~Le gestionnaire voit la demande et peut valider/refuser~~
+- ~~Une fois validé, le copropriétaire a accès à la copro~~
 
 ### US-2.3 : Voir mes copropriétés
 **En tant que** utilisateur connecté,
@@ -295,6 +299,104 @@
 - Chaque entrée : qui, quoi, quand
 - Consultable par le gestionnaire
 - Non modifiable / non supprimable
+
+---
+
+## Epic INV : Invitations personnalisées avec alias et recalcul rétroactif
+
+> **Ajouté en V1.1** — Remplace le flux de code unique par copro (US-2.1 partiel, US-2.2) par un système d'invitations personnalisées avec alias (placeholders), date d'adhésion et recalcul rétroactif des répartitions.
+
+### US-INV-1 : Création d'invitation personnalisée
+
+**En tant que** gestionnaire,
+**je veux** créer une invitation personnalisée avec un alias et une date d'adhésion,
+**afin de** préparer l'arrivée d'un futur copropriétaire.
+
+**Critères d'acceptation :**
+- Le formulaire contient : "Alias" (texte, obligatoire, min 2 chars) + "Date d'adhésion" (date, obligatoire)
+- A la soumission, le système crée :
+  - Une ligne `invitations` (code 12 hex, lié à la copro, `expires_at` = now + 1 an)
+  - Une ligne `membres` (`user_id = NULL`, `milliemes = 0`, `alias` = nom fourni, `date_adhesion` = date fournie, `invitation_id` = invitation créée)
+- Le code est affiché avec bouton copier
+- Plusieurs invitations possibles par copro
+- Seul un gestionnaire peut créer des invitations
+
+### US-INV-2 : Affichage des alias dans la liste des membres
+
+**En tant que** membre,
+**je veux** voir les alias (placeholders) dans la liste des membres,
+**afin de** savoir quels futurs copropriétaires sont attendus.
+
+**Critères d'acceptation :**
+- Les membres `user_id = NULL` affichent leur alias à la place du nom/prénom
+- Badge visuel "En attente" distinctif
+- Millièmes affichés = 0, date d'adhésion visible
+- Le gestionnaire voit aussi le code d'invitation associé
+
+### US-INV-3 : Gestion des invitations
+
+**En tant que** gestionnaire,
+**je veux** lister, révoquer et régénérer les invitations,
+**afin de** garder le contrôle.
+
+**Critères d'acceptation :**
+- Section "Invitations en attente" sur la page Membres (alias + code + date adhésion + expiration)
+- Révoquer = supprime invitation + membre placeholder + répartitions associées
+- Régénérer = nouveau code, ancien invalide, placeholder inchangé
+- L'ancien flux de code unique par copro est supprimé
+
+### US-INV-4 : Dépenses avec alias (millièmes = 0)
+
+**En tant que** gestionnaire,
+**je veux** que les alias soient inclus dans les répartitions avec `montant_du = 0`,
+**afin de** pouvoir surcharger manuellement si nécessaire.
+
+**Critères d'acceptation :**
+- `calculateRepartition()` inclut tous les membres actifs (aliases = 0 millièmes -> 0 EUR)
+- Répartitions des alias visibles dans le détail de la dépense
+- Gestionnaire peut override via `OverrideDialog` sur la répartition d'un alias
+- Le nom affiché est l'alias (pas "-- --")
+
+### US-INV-5 : Inscription via lien d'invitation
+
+**En tant que** futur copropriétaire,
+**je veux** recevoir un lien qui pré-remplit le code sur la page d'inscription,
+**afin de** simplifier mon onboarding.
+
+**Critères d'acceptation :**
+- Format du lien : `/{locale}/register?code={code}`
+- Page d'inscription affichée avec code pré-rempli (visible, non modifiable)
+- Si déjà inscrit : `/{locale}/login?code={code}` -> après login, JoinCoproDialog s'ouvre avec code pré-rempli
+- Saisie manuelle du code via JoinCoproDialog toujours possible
+
+### US-INV-6 : Adhésion avec remplacement de l'alias
+
+**En tant qu'** utilisateur inscrit avec un code,
+**je veux** rejoindre la copro en entrant le code + mes millièmes,
+**afin de** remplacer l'alias par mon vrai profil.
+
+**Critères d'acceptation :**
+- JoinCoproDialog accepte code + millièmes (min 1)
+- Vérifie : code valide, non utilisé, non expiré
+- **UPDATE** du membre placeholder (pas INSERT) : `user_id` = utilisateur, `milliemes` = valeur saisie, `alias = NULL`
+- Invitation marquée `is_used = true`, `used_by` = user_id
+- Erreur si déjà membre actif de cette copro
+- Audit `join` enregistré + notification aux autres membres
+
+### US-INV-7 : Recalcul rétroactif des répartitions
+
+**En tant que** système,
+**je veux** recalculer les montants des répartitions non payées après l'adhésion,
+**afin que** la quote-part reflète les nouveaux millièmes.
+
+**Critères d'acceptation :**
+- Après US-INV-6, identifier toutes les répartitions du membre dont `date_depense >= date_adhesion`
+- Si `montant_override IS NOT NULL` -> ne pas modifier (surcharge préservée)
+- Si `montant_override IS NULL` ET `statut != 'paye'` -> recalculer `montant_du` selon nouveaux millièmes / total millièmes copro
+- Dépenses avec `date_depense < date_adhesion` -> inchangées
+- Répartitions payées -> jamais recalculées
+- Répartitions des AUTRES membres pour les mêmes dépenses également recalculées (nouveau total millièmes)
+- Audit `recalcul_retroactif` enregistré
 
 ---
 
