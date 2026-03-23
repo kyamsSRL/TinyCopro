@@ -5,8 +5,9 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { createOverrideSchema } from '@/lib/validation';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { overrideRepartition } from '@/services/depense';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,12 +25,7 @@ import type { Tables } from '@/types/database.types';
 
 type Repartition = Tables<'repartitions'>;
 
-const overrideSchema = z.object({
-  montant_override: z.string().min(1, 'Amount is required'),
-  motif_override: z.string().min(1, 'Reason is required'),
-});
-
-type OverrideFormValues = z.infer<typeof overrideSchema>;
+// Schema created inside component via createOverrideSchema(tv)
 
 interface OverrideDialogProps {
   repartition: Repartition;
@@ -48,6 +44,11 @@ export function OverrideDialog({
 }: OverrideDialogProps) {
   const t = useTranslations('depenses');
   const tc = useTranslations('common');
+  const tv = useTranslations('validation');
+
+  const overrideSchema = createOverrideSchema(tv);
+  type OverrideFormValues = z.infer<typeof overrideSchema>;
+
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -70,13 +71,11 @@ export function OverrideDialog({
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase
-        .from('repartitions')
-        .update({
-          montant_override: montant,
-          motif_override: values.motif_override,
-        })
-        .eq('id', repartition.id);
+      const { error } = await overrideRepartition({
+        repartitionId: repartition.id,
+        montantOverride: montant,
+        motifOverride: values.motif_override,
+      });
 
       if (error) {
         toast.error(tc('error'));

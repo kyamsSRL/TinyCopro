@@ -17,6 +17,48 @@ node e2e/test-e2e.mjs  # E2E tests (requires `npm run build` first, serves out/ 
 
 No unit test framework is configured. Testing is E2E only via Puppeteer.
 
+## Mandatory Rules
+
+### Service Layer — NO direct Supabase queries in components
+
+**Components and hooks MUST NEVER import `supabase` or call `supabase.from()`, `supabase.rpc()`, or `supabase.storage` directly.**
+
+The only exception is `src/components/auth/AuthProvider.tsx` which uses `supabase.auth.*` for authentication.
+
+All data access follows this chain:
+
+```
+Components → Services (src/services/) → supabase.rpc() → PostgreSQL SECURITY DEFINER functions
+```
+
+- **Components** (`src/components/`, `src/app/`) import functions from `src/services/` only
+- **Services** (`src/services/`) are the sole gateway to Supabase — they call `supabase.rpc()` for all queries and mutations, and `supabase.storage` for file uploads only
+- **RPC functions** are PostgreSQL `SECURITY DEFINER` functions that handle all business logic, calculations, and multi-step operations atomically
+
+### No business logic in the frontend
+
+- Financial calculations (expense distribution, totals) happen in PostgreSQL functions, never in JavaScript
+- Multi-step operations (create copro + member + exercice, generate payment + link repartitions + update statuses) are atomic in a single RPC call
+- Permission checks are enforced server-side in RPC functions, not trusted from frontend state
+- Invitation codes are generated server-side with `gen_random_bytes()`, not `Math.random()`
+
+### Services structure
+
+```
+src/services/
+  copropriete.ts    → create, list, detail
+  membre.ts         → invitation, join, milliemes, transfer, revoke
+  depense.ts        → create, list, categories, override
+  paiement.ts       → generate, mark paid, upload proof, list
+  exercice.ts       → close, create, list, export
+```
+
+### Validation messages must be translated
+
+- All Zod schemas use translated messages via `useTranslations('validation')`
+- Schema factory functions live in `src/lib/validation.ts` (e.g., `createLoginSchema(tv)`)
+- Never use bare `.min(6)` or `.email()` without a translated message parameter
+
 ## Architecture
 
 ### Static Export SPA
@@ -71,17 +113,19 @@ src/components/
 ### Database
 
 - Supabase PostgreSQL with RLS on all tables
-- Types auto-generated in `src/types/database.types.ts` (via Supabase MCP `generate_typescript_types`)
-- Key tables: `coproprietes`, `membres`, `profiles`, `exercices`, `depenses`, `repartitions`, `appels_paiement`, `categories_depenses`, `invitations`, `journal_audit`
+- Types in `src/types/database.types.ts` (regenerate via Supabase MCP `generate_typescript_types`)
+- Key tables: `coproprietes`, `membres`, `profiles`, `exercices`, `depenses`, `repartitions`, `appels_paiement`, `appel_repartitions`, `paiements`, `categories_depenses`, `journal_audit`
+- All mutations and queries go through SECURITY DEFINER RPC functions (see `src/services/`)
+- `invitations` table has been removed — invitation data lives on `membres` (columns: `invitation_code`, `invitation_email`, `invitation_expires_at`, `invitation_used_by`)
 
 ### Utilities
 
-- `src/lib/milliemes.ts` — expense distribution by ownership shares
+- `src/lib/validation.ts` — Zod schema factories with translated messages
 - `src/lib/pdf-generator.ts` — payment invoice PDFs (@react-pdf/renderer)
 - `src/lib/qr-generator.ts` — EPC/SEPA QR codes
 - `src/lib/csv-export.ts` — CSV export (papaparse)
-- `src/lib/audit.ts` — append-only audit logging
-- `src/lib/notifications.ts` — email via Supabase Edge Function
+- `src/lib/audit.ts` — append-only audit logging (fire-and-forget)
+- `src/lib/notifications.ts` — email via Supabase Edge Function (fire-and-forget)
 
 ### E2E Tests
 
@@ -90,7 +134,9 @@ Puppeteer-based in `e2e/test-e2e.mjs`. Multi-user tests use `browser.createBrows
 ## Critical Patterns
 
 - **Never `await` inside `onAuthStateChange`** — causes deadlock when token refresh is needed. Fire-and-forget only.
-- **`.insert().select()` needs both INSERT + SELECT RLS policies**. If SELECT can't match the new row, INSERT fails. Generate UUID client-side and skip `.select()`.
+- **Never call `supabase.from()` in components** — always go through `src/services/` which call `supabase.rpc()`.
+- **All multi-step DB operations must be in a single RPC** — never do sequential inserts/updates from the frontend.
 - **Dialog submit buttons must be inside `<form>`** — `form="id"` attribute doesn't work in portals (base-ui Dialog).
 - **Use `window.location.href` for navigation** (not `router.replace`) in static export for reliable behavior.
 - **`setState` + function call in same handler**: the function sees stale state. Pass the value as a parameter instead.
+- **New RPC functions** must be SECURITY DEFINER with `SET search_path = ''`, added to `src/types/database.types.ts` Functions section, and exposed via the appropriate service in `src/services/`.

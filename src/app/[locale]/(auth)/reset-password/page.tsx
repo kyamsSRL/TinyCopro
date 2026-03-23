@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { createResetSchema } from '@/lib/validation';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,16 +21,14 @@ import {
 } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-const resetSchema = z.object({
-  email: z.string().email(),
-});
-
-type ResetFormValues = z.infer<typeof resetSchema>;
-
 export default function ResetPasswordPage() {
   const t = useTranslations('auth');
   const tCommon = useTranslations('common');
+  const tv = useTranslations('validation');
   const { resetPassword } = useAuth();
+
+  const resetSchema = createResetSchema(tv);
+  type ResetFormValues = z.infer<typeof resetSchema>;
   const pathname = usePathname();
   const locale = pathname.split('/')[1] || 'fr';
 

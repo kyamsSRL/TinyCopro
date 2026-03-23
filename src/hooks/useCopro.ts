@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from './useAuth';
+import { listUserCopros, getCoproDetail } from '@/services/copropriete';
 import type { Tables } from '@/types/database.types';
 
 type Copropriete = Tables<'coproprietes'>;
 type Membre = Tables<'membres'>;
+type Exercice = Tables<'exercices'>;
 
 export function useCopros() {
   const { user } = useAuth();
@@ -17,20 +18,8 @@ export function useCopros() {
   const fetchCopros = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     try {
-      const { data: membres } = await supabase
-        .from('membres')
-        .select('copropriete_id, role, milliemes, coproprietes(*)')
-        .eq('user_id', userId)
-        .eq('is_active', true);
-
-      if (membres) {
-        const mapped = membres.map((m: any) => ({
-          ...m.coproprietes,
-          role: m.role,
-          milliemes: m.milliemes,
-        }));
-        setCopros(mapped);
-      }
+      const { data } = await listUserCopros(userId);
+      if (data) setCopros(data);
     } finally {
       setLoading(false);
     }
@@ -42,8 +31,6 @@ export function useCopros() {
 
   return { copros, loading, refetch: fetchCopros };
 }
-
-type Exercice = Tables<'exercices'>;
 
 export function useCoproDetail(coproId: string) {
   const { user } = useAuth();
@@ -62,30 +49,16 @@ export function useCoproDetail(coproId: string) {
     }
 
     try {
-      const [coproRes, membresRes, exerciceRes] = await Promise.all([
-        supabase.from('coproprietes').select('*').eq('id', coproId).single(),
-        supabase
-          .from('membres')
-          .select('*, profiles(*)')
-          .eq('copropriete_id', coproId)
-          .eq('is_active', true),
-        supabase
-          .from('exercices')
-          .select('*')
-          .eq('copropriete_id', coproId)
-          .eq('statut', 'ouvert')
-          .order('annee', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
-
-      if (coproRes.data) setCopro(coproRes.data);
-      if (membresRes.data) {
-        setMembres(membresRes.data as any);
-        const me = membresRes.data.find((m: any) => m.user_id === userId);
-        if (me) setCurrentMembre(me);
+      const { data } = await getCoproDetail(coproId);
+      if (data) {
+        if (data.copro) setCopro(data.copro);
+        if (data.membres) {
+          setMembres(data.membres);
+          const me = data.membres.find((m: any) => m.user_id === userId);
+          if (me) setCurrentMembre(me);
+        }
+        if (data.exercice) setExercice(data.exercice);
       }
-      if (exerciceRes.data) setExercice(exerciceRes.data);
     } finally {
       setLoading(false);
     }

@@ -11,7 +11,8 @@ type NotificationType =
   | 'appel_paiement'
   | 'paiement_confirme'
   | 'relance_retard'
-  | 'nouveau_membre';
+  | 'nouveau_membre'
+  | 'invitation';
 
 interface NotificationPayload {
   type: NotificationType;

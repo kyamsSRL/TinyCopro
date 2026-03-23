@@ -3,26 +3,14 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Shield, UserPlus, Copy, Check, RefreshCw, Trash2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { useAuth } from '@/hooks/useAuth';
+import { updateMilliemes, transferRole, revokeMember, regenerateCode } from '@/services/membre';
 import { useCoproContext } from '@/components/copro/CoproContext';
 import { CreateInvitationDialog } from '@/components/copro/CreateInvitationDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Card,
-  CardContent,
-} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableHead,
-  TableRow,
-  TableCell,
-} from '@/components/ui/table';
 import {
   Dialog,
   DialogTrigger,
@@ -33,12 +21,6 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 export function MembresPageContent() {
@@ -65,10 +47,7 @@ export function MembresPageContent() {
 
   const saveMilliemes = async (membreId: string) => {
     setSaving(true);
-    const { error } = await supabase
-      .from('membres')
-      .update({ milliemes: editMilliemes })
-      .eq('id', membreId);
+    const { error } = await updateMilliemes(membreId, editMilliemes);
     if (!error) {
       await refetch();
       setEditingId(null);
@@ -85,17 +64,11 @@ export function MembresPageContent() {
     );
     if (!currentGestionnaire) { setTransferring(false); return; }
 
-    const { error: promoteError } = await supabase
-      .from('membres')
-      .update({ role: 'gestionnaire' })
-      .eq('id', targetMembreId);
-    if (promoteError) { setTransferring(false); return; }
-
-    const { error: demoteError } = await supabase
-      .from('membres')
-      .update({ role: 'coproprietaire' })
-      .eq('id', currentGestionnaire.id);
-    if (!demoteError) {
+    const { error } = await transferRole({
+      fromMembreId: currentGestionnaire.id,
+      toMembreId: targetMembreId,
+    });
+    if (!error) {
       logAudit({ coproprieteId: copro.id, action: 'transfer_role', entityType: 'membre', entityId: targetMembreId });
       await refetch();
     }
@@ -114,15 +87,7 @@ export function MembresPageContent() {
   const handleRegenerate = async (membreId: string) => {
     if (!copro) return;
     setRegenerating(membreId);
-    const chars = '0123456789abcdef';
-    let newCode = '';
-    for (let i = 0; i < 12; i++) newCode += chars[Math.floor(Math.random() * chars.length)];
-    const expiresAt = new Date();
-    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-    await supabase.from('membres').update({
-      invitation_code: newCode,
-      invitation_expires_at: expiresAt.toISOString(),
-    }).eq('id', membreId);
+    await regenerateCode(membreId);
     logAudit({ coproprieteId: copro.id, action: 'regenerate_invitation', entityType: 'membre', entityId: membreId });
     setRegenerating(null);
     await refetch();
@@ -131,7 +96,7 @@ export function MembresPageContent() {
   const handleRevoke = async (membreId: string) => {
     if (!copro || !user) return;
     setRevoking(membreId);
-    await supabase.from('membres').delete().eq('id', membreId);
+    await revokeMember(membreId);
     logAudit({ coproprieteId: copro.id, action: 'revoke_invitation', entityType: 'membre', entityId: membreId });
     setRevoking(null);
     setSelectedMembre(null);
@@ -257,8 +222,7 @@ export function MembresPageContent() {
       {membres.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">{tc('noResults')}</div>
       ) : (<>
-        {/* Mobile cards */}
-        <div className="md:hidden space-y-2">
+        <div className="grid gap-2 md:grid-cols-2">
           {membres.map((membre) => {
             const display = getMemberDisplayName(membre);
             const placeholder = isPlaceholder(membre);
@@ -288,81 +252,21 @@ export function MembresPageContent() {
           })}
         </div>
 
-        {/* Desktop table */}
-        <Card className="hidden md:block">
-          <CardContent className="p-0 overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Prénom</TableHead>
-                  <TableHead>{t('role')}</TableHead>
-                  <TableHead>{t('dateAdhesion')}</TableHead>
-                  {isGestionnaire && <TableHead>{t('invitationCode')}</TableHead>}
-                  <TableHead className="text-right">{t('milliemes')}</TableHead>
-                  {isGestionnaire && <TableHead className="text-right">Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {membres.map((membre) => {
-                  const display = getMemberDisplayName(membre);
-                  const placeholder = isPlaceholder(membre);
-                  const membreAny = membre as any;
-                  return (
-                    <TableRow key={membre.id} className={`cursor-pointer ${placeholder ? 'opacity-70' : ''}`} onClick={() => setSelectedMembre(membre)}>
-                      <TableCell className="font-medium">
-                        {display.nom}
-                        {placeholder && <Badge variant="secondary" className="ml-2">{t('enAttente')}</Badge>}
-                      </TableCell>
-                      <TableCell>{display.prenom}</TableCell>
-                      <TableCell>
-                        <Badge variant={membre.role === 'gestionnaire' ? 'default' : 'secondary'}>
-                          {membre.role === 'gestionnaire' ? t('gestionnaire') : t('coproprietaire')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{membre.date_adhesion || '--'}</TableCell>
-                      {isGestionnaire && (
-                        <TableCell>
-                          {placeholder && membreAny.invitation_code ? (
-                            <div className="flex items-center gap-1.5">
-                              <code className="font-mono tracking-wide text-xs bg-muted px-1.5 py-0.5 rounded">{membreAny.invitation_code}</code>
-                              <span className="text-xs text-muted-foreground">
-                                exp. {new Date(membreAny.invitation_expires_at).toLocaleDateString()}
-                              </span>
-                            </div>
-                          ) : null}
-                        </TableCell>
-                      )}
-                      <TableCell className="text-right">{membre.milliemes}</TableCell>
-                      {isGestionnaire && (
-                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          {renderMembreActions(membre)}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        {/* Detail sheet */}
-        <Sheet open={!!selectedMembre} onOpenChange={(open) => { if (!open) setSelectedMembre(null); }}>
-          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+        <Dialog open={!!selectedMembre} onOpenChange={(open) => { if (!open) setSelectedMembre(null); }}>
+          <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
             {selectedMembre && (() => {
               const display = getMemberDisplayName(selectedMembre);
               const placeholder = isPlaceholder(selectedMembre);
               const membreAny = selectedMembre as any;
               return (
                 <>
-                  <SheetHeader>
-                    <SheetTitle>
+                  <DialogHeader>
+                    <DialogTitle>
                       {display.prenom} {display.nom}
                       {placeholder && <Badge variant="secondary" className="ml-2">{t('enAttente')}</Badge>}
-                    </SheetTitle>
-                  </SheetHeader>
-                  <div className="px-4 pb-6 space-y-4">
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
                     <div className="flex flex-wrap gap-2">
                       <Badge variant={selectedMembre.role === 'gestionnaire' ? 'default' : 'secondary'}>
                         {selectedMembre.role === 'gestionnaire' ? t('gestionnaire') : t('coproprietaire')}
@@ -419,8 +323,8 @@ export function MembresPageContent() {
                 </>
               );
             })()}
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
       </>)}
     </div>
   );

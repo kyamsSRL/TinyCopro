@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { FileDown, Plus, CheckCircle, Paperclip, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
 import { useCoproContext } from '@/components/copro/CoproContext';
 import { GeneratePaymentForm } from '@/components/paiements/GeneratePaymentForm';
 import { MarkAsPaidDialog } from '@/components/paiements/MarkAsPaidDialog';
@@ -14,24 +13,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableHead,
-  TableRow,
-  TableCell,
-} from '@/components/ui/table';
-import {
   Dialog,
   DialogTrigger,
   DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { uploadProof, listAppels } from '@/services/paiement';
 import type { Tables, Enums } from '@/types/database.types';
 
 type AppelPaiement = Tables<'appels_paiement'>;
@@ -69,20 +57,12 @@ export function PaiementsPageContent() {
       return;
     }
     setUploadingProofId(paiementId);
-    const ext = file.name.split('.').pop();
-    const filePath = `${copro.id}/preuves/${crypto.randomUUID()}.${ext}`;
-    const { error: uploadError } = await supabase.storage
-      .from('justificatifs')
-      .upload(filePath, file);
-    if (uploadError) {
-      toast.error(uploadError.message);
+    const { error: proofError } = await uploadProof({ paiementId, coproId: copro.id, file });
+    if (proofError) {
+      toast.error(proofError.message);
       setUploadingProofId(null);
       return;
     }
-    const { data: { publicUrl } } = supabase.storage
-      .from('justificatifs')
-      .getPublicUrl(filePath);
-    await supabase.from('paiements').update({ preuve_paiement_url: publicUrl }).eq('id', paiementId);
     setUploadingProofId(null);
     setSelectedAppel(null);
     fetchAppels();
@@ -92,32 +72,11 @@ export function PaiementsPageContent() {
     if (!copro || !currentMembre) return;
     setLoading(true);
 
-    const { data: myData } = await supabase
-      .from('appels_paiement')
-      .select(`
-        *,
-        membres(*, profiles(*)),
-        paiements(*),
-        appel_repartitions(repartitions(*, depenses(*)))
-      `)
-      .eq('copropriete_id', copro.id)
-      .eq('membre_id', currentMembre.id)
-      .order('created_at', { ascending: false });
-
+    const { data: myData } = await listAppels(copro.id, currentMembre.id);
     if (myData) setMyAppels(myData as unknown as AppelWithMember[]);
 
     if (isGestionnaire) {
-      const { data: allData } = await supabase
-        .from('appels_paiement')
-        .select(`
-          *,
-          membres(*, profiles(*)),
-          paiements(*),
-          appel_repartitions(repartitions(*, depenses(*)))
-        `)
-        .eq('copropriete_id', copro.id)
-        .order('created_at', { ascending: false });
-
+      const { data: allData } = await listAppels(copro.id);
       if (allData) setAllAppels(allData as unknown as AppelWithMember[]);
     }
 
@@ -224,9 +183,8 @@ export function PaiementsPageContent() {
     if (appels.length === 0) {
       return <div className="text-center py-12 text-muted-foreground">{t('noPaiements')}</div>;
     }
-    return (<>
-      {/* Mobile cards */}
-      <div className="md:hidden space-y-2">
+    return (
+      <div className="grid gap-2 md:grid-cols-2">
         {appels.map(appel => (
           <div
             key={appel.id}
@@ -247,37 +205,7 @@ export function PaiementsPageContent() {
           </div>
         ))}
       </div>
-
-      {/* Desktop table */}
-      <div className="hidden md:block overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('paymentReference')}</TableHead>
-              {showMember && <TableHead>Membre</TableHead>}
-              <TableHead>{t('totalToPay')}</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Statut</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {appels.map(appel => (
-              <TableRow key={appel.id} className="cursor-pointer" onClick={() => setSelectedAppel(appel)}>
-                <TableCell className="font-medium">{appel.reference}</TableCell>
-                {showMember && <TableCell>{getMemberName(appel)}</TableCell>}
-                <TableCell>{appel.montant_total.toFixed(2)} {copro?.devise}</TableCell>
-                <TableCell>{new Date(appel.created_at).toLocaleDateString()}</TableCell>
-                <TableCell>{getStatusBadge(appel.statut)}</TableCell>
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  {renderActions(appel)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </>);
+    );
   };
 
   if (loading) {
@@ -324,18 +252,17 @@ export function PaiementsPageContent() {
         <div>{renderAppelsList(myAppels, false)}</div>
       )}
 
-      {/* Detail sheet */}
-      <Sheet open={!!selectedAppel} onOpenChange={(open) => { if (!open) setSelectedAppel(null); }}>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+      <Dialog open={!!selectedAppel} onOpenChange={(open) => { if (!open) setSelectedAppel(null); }}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           {selectedAppel && (
             <>
-              <SheetHeader>
-                <SheetTitle className="flex items-center justify-between gap-2">
+              <DialogHeader>
+                <DialogTitle className="flex items-center justify-between gap-2">
                   <span>{selectedAppel.reference}</span>
                   <span className="text-base">{selectedAppel.montant_total.toFixed(2)} {copro?.devise}</span>
-                </SheetTitle>
-              </SheetHeader>
-              <div className="px-4 pb-6 space-y-4">
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
                 <div className="flex flex-wrap gap-2">
                   {getStatusBadge(selectedAppel.statut)}
                   <Badge variant="outline">{new Date(selectedAppel.created_at).toLocaleDateString()}</Badge>
@@ -356,8 +283,8 @@ export function PaiementsPageContent() {
               </div>
             </>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

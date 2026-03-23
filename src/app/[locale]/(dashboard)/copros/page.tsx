@@ -37,7 +37,7 @@ export default function CoprosPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
+      const code = params.get('ref');
       if (code) setInvitationCode(code);
     }
   }, []);

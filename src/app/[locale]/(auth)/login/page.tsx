@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { createLoginSchema } from '@/lib/validation';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,16 +22,13 @@ import {
 } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-});
-
-type LoginFormValues = z.infer<typeof loginSchema>;
-
 export default function LoginPage() {
   const t = useTranslations('auth');
+  const tv = useTranslations('validation');
   const { signIn, user, loading } = useAuth();
+
+  const loginSchema = createLoginSchema(tv);
+  type LoginFormValues = z.infer<typeof loginSchema>;
   const pathname = usePathname();
   const locale = pathname.split('/')[1] || 'fr';
 
@@ -42,7 +40,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
+      const code = params.get('ref');
       if (code) setInvitationCode(code);
     }
   }, []);
@@ -50,7 +48,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (!loading && user) {
       const redirect = invitationCode
-        ? `/${locale}/copros/?code=${invitationCode}`
+        ? `/${locale}/copros/?ref=${invitationCode}`
         : `/${locale}/copros/`;
       window.location.href = redirect;
     }
@@ -73,7 +71,7 @@ export default function LoginPage() {
         setError(t('loginError'));
       } else {
         const redirect = invitationCode
-          ? `/${locale}/copros/?code=${invitationCode}`
+          ? `/${locale}/copros/?ref=${invitationCode}`
           : `/${locale}/copros/`;
         window.location.href = redirect;
       }

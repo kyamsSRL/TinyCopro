@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { createProfileSchema } from '@/lib/validation';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -18,21 +19,14 @@ import {
   CardContent,
 } from '@/components/ui/card';
 
-const profileSchema = z.object({
-  nom: z.string().min(1),
-  prenom: z.string().min(1),
-  adresse: z.string().min(1),
-  telephone: z.string(),
-  societe: z.string(),
-  numero_societe: z.string(),
-});
-
-type ProfileFormValues = z.infer<typeof profileSchema>;
-
 export default function ProfilPage() {
   const t = useTranslations('profile');
   const tAuth = useTranslations('auth');
   const tCommon = useTranslations('common');
+  const tv = useTranslations('validation');
+
+  const profileSchema = createProfileSchema(tv);
+  type ProfileFormValues = z.infer<typeof profileSchema>;
   const { profile, loading, updateProfile } = useAuth();
 
   const [isSubmitting, setIsSubmitting] = useState(false);

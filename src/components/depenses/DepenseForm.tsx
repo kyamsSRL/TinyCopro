@@ -5,13 +5,14 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { createDepenseSchema } from '@/lib/validation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { logAudit } from '@/lib/audit';
 import { sendNotification } from '@/lib/notifications';
 import { useCoproContext } from '@/components/copro/CoproContext';
-import { calculateRepartition } from '@/lib/milliemes';
+import { createDepense, listCategories } from '@/services/depense';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,16 +33,6 @@ import type { Tables } from '@/types/database.types';
 
 type Category = Tables<'categories_depenses'>;
 
-const depenseSchema = z.object({
-  libelle: z.string().min(1, 'Libelle is required'),
-  montant_total: z.string().min(1, 'Amount is required'),
-  date_depense: z.string().min(1, 'Date is required'),
-  description: z.string().optional(),
-  justificatif_url: z.string().optional(),
-});
-
-type DepenseFormValues = z.infer<typeof depenseSchema>;
-
 interface DepenseFormProps {
   onSuccess?: () => void;
 }
@@ -49,6 +40,10 @@ interface DepenseFormProps {
 export function DepenseForm({ onSuccess }: DepenseFormProps) {
   const t = useTranslations('depenses');
   const tc = useTranslations('common');
+  const tv = useTranslations('validation');
+
+  const depenseSchema = createDepenseSchema(tv);
+  type DepenseFormValues = z.infer<typeof depenseSchema>;
   const { user } = useAuth();
   const { copro, membres, exercice } = useCoproContext();
 
@@ -70,15 +65,9 @@ export function DepenseForm({ onSuccess }: DepenseFormProps) {
 
   useEffect(() => {
     if (!copro) return;
-    const fetchCategories = async () => {
-      const { data } = await supabase
-        .from('categories_depenses')
-        .select('*')
-        .or(`is_global.eq.true,copropriete_id.eq.${copro.id}`)
-        .order('nom');
+    listCategories(copro.id).then(({ data }) => {
       if (data) setCategories(data);
-    };
-    fetchCategories();
+    });
   }, [copro]);
 
   const onSubmit = async (values: DepenseFormValues) => {
@@ -95,55 +84,28 @@ export function DepenseForm({ onSuccess }: DepenseFormProps) {
 
     setIsSubmitting(true);
     try {
-      // Insert depense
-      const { data: depense, error: depError } = await supabase
-        .from('depenses')
-        .insert({
-          libelle: values.libelle,
-          montant_total: montant,
-          date_depense: values.date_depense,
-          description: values.description || null,
-          categorie_id: selectedCategoryId || null,
-          frequence: selectedFrequence as 'unique' | 'mensuelle' | 'trimestrielle' | 'annuelle',
-          copropriete_id: copro.id,
-          exercice_id: exercice.id,
-          created_by: user.id,
-          justificatif_urls: values.justificatif_url ? [values.justificatif_url] : null,
-        })
-        .select()
-        .single();
+      const { depenseId, error: rpcError } = await createDepense({
+        coproId: copro.id,
+        exerciceId: exercice.id,
+        libelle: values.libelle,
+        montantTotal: montant,
+        dateDepense: values.date_depense,
+        description: values.description || undefined,
+        categorieId: selectedCategoryId || undefined,
+        frequence: selectedFrequence,
+        createdBy: user.id,
+      });
 
-      if (depError || !depense) {
-        toast.error(tc('error'));
+      if (rpcError || !depenseId) {
+        toast.error(rpcError?.message || tc('error'));
         return;
-      }
-
-      // Calculate repartitions
-      const repartitions = calculateRepartition(
-        montant,
-        membres.map(m => ({ id: m.id, milliemes: m.milliemes }))
-      );
-
-      if (repartitions.length > 0) {
-        const { error: repError } = await supabase.from('repartitions').insert(
-          repartitions.map(r => ({
-            depense_id: depense.id,
-            membre_id: r.membre_id,
-            montant_du: r.montant_du,
-          }))
-        );
-
-        if (repError) {
-          toast.error(tc('error'));
-          return;
-        }
       }
 
       logAudit({
         coproprieteId: copro.id,
         action: 'create',
         entityType: 'depense',
-        entityId: depense.id,
+        entityId: depenseId,
         details: { libelle: values.libelle, montant: montant },
       });
 
@@ -274,18 +236,6 @@ export function DepenseForm({ onSuccess }: DepenseFormProps) {
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="justificatif_url">
-            {t('justificatif')}{' '}
-            <span className="text-muted-foreground text-xs">({tc('optional')})</span>
-          </Label>
-          <Input
-            id="justificatif_url"
-            type="url"
-            placeholder="https://..."
-            {...register('justificatif_url')}
-          />
-        </div>
 
         <DialogFooter>
           <Button type="submit" disabled={isSubmitting}>

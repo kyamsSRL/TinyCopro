@@ -5,9 +5,10 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { supabase } from '@/lib/supabase';
+import { createCoproSchema } from '@/lib/validation';
 import { useAuth } from '@/hooks/useAuth';
 import { logAudit } from '@/lib/audit';
+import { createCopropriete } from '@/services/copropriete';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,17 +21,6 @@ import {
 } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-const createCoproSchema = z.object({
-  nom: z.string().min(2),
-  adresse: z.string().min(5),
-  numero_societe: z.string().optional(),
-  iban: z.string().min(5),
-  bic: z.string().optional(),
-  milliemes: z.number().int().min(0),
-});
-
-type CreateCoproFormValues = z.infer<typeof createCoproSchema>;
-
 interface CreateCoproFormProps {
   onSuccess?: () => void;
 }
@@ -38,6 +28,10 @@ interface CreateCoproFormProps {
 export function CreateCoproForm({ onSuccess }: CreateCoproFormProps) {
   const t = useTranslations('copro');
   const tc = useTranslations('common');
+  const tv = useTranslations('validation');
+
+  const coproSchema = createCoproSchema(tv);
+  type CreateCoproFormValues = z.infer<typeof coproSchema>;
   const { user } = useAuth();
 
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +44,7 @@ export function CreateCoproForm({ onSuccess }: CreateCoproFormProps) {
     formState: { errors },
     reset,
   } = useForm<CreateCoproFormValues>({
-    resolver: zodResolver(createCoproSchema),
+    resolver: zodResolver(coproSchema),
     defaultValues: {
       nom: '',
       adresse: '',
@@ -70,54 +64,18 @@ export function CreateCoproForm({ onSuccess }: CreateCoproFormProps) {
     setIsSubmitting(true);
 
     try {
-      // Generate ID client-side to avoid needing .select().single()
-      // (PostgREST requires SELECT policy for RETURNING, but user isn't a member yet)
-      const coproId = crypto.randomUUID();
-
-      // 1. Create the copropriete
-      const { error: coproError } = await supabase
-        .from('coproprietes')
-        .insert({
-          id: coproId,
-          nom: values.nom,
-          adresse: values.adresse,
-          numero_societe: values.numero_societe || undefined,
-          iban: values.iban,
-          bic: values.bic || undefined,
-        });
-
-      if (coproError) {
-        setError(coproError.message);
-        setIsSubmitting(false);
-        return;
-      }
-
-      // 2. Insert creator as membre with role 'gestionnaire'
-      const { error: membreError } = await supabase.from('membres').insert({
-        copropriete_id: coproId,
-        user_id: user.id,
-        role: 'gestionnaire',
+      const { coproId, error: rpcError } = await createCopropriete({
+        nom: values.nom,
+        adresse: values.adresse,
+        numero_societe: values.numero_societe,
+        iban: values.iban,
+        bic: values.bic || undefined,
         milliemes: values.milliemes,
+        userId: user.id,
       });
 
-      if (membreError) {
-        setError(membreError.message);
-        setIsSubmitting(false);
-        return;
-      }
-
-      // 3. Create a default exercice for current year
-      const currentYear = new Date().getFullYear();
-      const { error: exerciceError } = await supabase.from('exercices').insert({
-        copropriete_id: coproId,
-        annee: currentYear,
-        date_debut: `${currentYear}-01-01`,
-        date_fin: `${currentYear}-12-31`,
-        statut: 'ouvert',
-      });
-
-      if (exerciceError) {
-        setError(exerciceError.message);
+      if (rpcError || !coproId) {
+        setError(rpcError?.message || tc('error'));
         setIsSubmitting(false);
         return;
       }

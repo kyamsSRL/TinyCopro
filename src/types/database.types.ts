@@ -333,6 +333,7 @@ export type Database = {
           date_adhesion: string | null
           id: string
           invitation_code: string | null
+          invitation_email: string | null
           invitation_expires_at: string | null
           invitation_used_by: string | null
           is_active: boolean
@@ -527,8 +528,33 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_category: { Args: { p_copro_id: string; p_nom: string }; Returns: string }
+      claim_invitation: { Args: { p_invitation_code: string; p_user_id: string; p_milliemes: number }; Returns: unknown }
+      get_member_emails: { Args: { p_copro_id: string; p_exclude_user_id: string }; Returns: unknown }
+      close_exercice: { Args: { p_copro_id: string; p_exercice_id: string }; Returns: string }
+      create_exercice: { Args: { p_copro_id: string; p_annee: number }; Returns: string }
+      create_copro_with_member: { Args: { p_nom: string; p_adresse: string; p_numero_societe: string; p_iban: string; p_bic: string | null; p_milliemes: number; p_user_id: string }; Returns: string }
+      create_depense_with_repartitions: { Args: { p_copro_id: string; p_exercice_id: string; p_libelle: string; p_montant_total: number; p_date_depense: string; p_description: string | null; p_categorie_id: string | null; p_frequence: string; p_created_by: string; p_justificatif_urls: string[] | null }; Returns: string }
+      create_invitation_with_repartitions: { Args: { p_copro_id: string; p_alias: string; p_email: string | null; p_date_adhesion: string; p_created_by: string }; Returns: string }
+      delete_category: { Args: { p_category_id: string }; Returns: undefined }
+      generate_payment: { Args: { p_copro_id: string; p_membre_id: string; p_repartition_ids: string[]; p_created_by: string }; Returns: unknown }
+      get_appels: { Args: { p_copro_id: string; p_membre_id: string | null }; Returns: unknown }
+      get_exercices: { Args: { p_copro_id: string }; Returns: unknown }
+      get_export_data: { Args: { p_copro_id: string; p_exercice_id: string }; Returns: unknown }
+      get_repartitions_en_cours: { Args: { p_membre_id: string }; Returns: unknown }
+      get_categories: { Args: { p_copro_id: string }; Returns: unknown }
+      get_copro_detail: { Args: { p_copro_id: string }; Returns: unknown }
+      get_depenses: { Args: { p_copro_id: string; p_exercice_id: string }; Returns: unknown }
+      get_user_copros: { Args: { p_user_id: string }; Returns: unknown }
       is_gestionnaire_of: { Args: { copro_id: string }; Returns: boolean }
       is_member_of: { Args: { copro_id: string }; Returns: boolean }
+      mark_payment_as_paid: { Args: { p_appel_id: string; p_date_paiement: string; p_reference: string | null; p_preuve_paiement_url: string | null; p_confirmed_by: string }; Returns: string }
+      override_repartition: { Args: { p_repartition_id: string; p_montant: number; p_motif: string | null }; Returns: undefined }
+      regenerate_invitation_code: { Args: { p_membre_id: string }; Returns: string }
+      revoke_membre: { Args: { p_membre_id: string }; Returns: undefined }
+      transfer_role: { Args: { p_from_membre_id: string; p_to_membre_id: string }; Returns: undefined }
+      update_membre_milliemes: { Args: { p_membre_id: string; p_milliemes: number }; Returns: undefined }
+      upload_proof_url: { Args: { p_paiement_id: string; p_url: string }; Returns: undefined }
     }
     Enums: {
       frequence_recurrence:

@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { createRegisterSchema } from '@/lib/validation';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,29 +22,14 @@ import {
 } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
-const registerSchema = z
-  .object({
-    email: z.string().email(),
-    password: z.string().min(6),
-    confirmPassword: z.string().min(6),
-    nom: z.string().min(1),
-    prenom: z.string().min(1),
-    adresse: z.string().min(1),
-    telephone: z.string(),
-    societe: z.string(),
-    numero_societe: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    path: ['confirmPassword'],
-    message: 'Passwords do not match',
-  });
-
-type RegisterFormValues = z.infer<typeof registerSchema>;
-
 export default function RegisterPage() {
   const t = useTranslations('auth');
   const tCommon = useTranslations('common');
+  const tv = useTranslations('validation');
   const { signUp, user, loading } = useAuth();
+
+  const registerSchema = createRegisterSchema(tv);
+  type RegisterFormValues = z.infer<typeof registerSchema>;
   const pathname = usePathname();
   const locale = pathname.split('/')[1] || 'fr';
 
@@ -56,7 +42,7 @@ export default function RegisterPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
+      const code = params.get('ref');
       if (code) setInvitationCode(code);
     }
   }, []);
@@ -64,7 +50,7 @@ export default function RegisterPage() {
   useEffect(() => {
     if (!loading && user) {
       const redirect = invitationCode
-        ? `/${locale}/copros/?code=${invitationCode}`
+        ? `/${locale}/copros/?ref=${invitationCode}`
         : `/${locale}/copros/`;
       window.location.href = redirect;
     }

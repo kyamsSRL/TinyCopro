@@ -91,7 +91,11 @@
     "codeInvalide": "Invalid or expired code.",
     "dejaMembre": "You are already a member of this co-ownership.",
     "expiration": "Expiration",
-    "copierCode": "Copy code"
+    "copierCode": "Copy code",
+    "invitationEmail": "Email address",
+    "copyLink": "Copy link",
+    "sendByEmail": "Send by email",
+    "linkCopied": "Link copied!"
   },
   "depenses": {
     "title": "Expenses",
@@ -172,6 +176,21 @@
     "date": "Date",
     "details": "Details",
     "noEntries": "No entries in the log."
+  },
+  "validation": {
+    "required": "This field is required.",
+    "emailInvalid": "Invalid email address.",
+    "passwordMin": "Password must be at least 6 characters.",
+    "passwordMismatch": "Passwords do not match.",
+    "nameMin": "Minimum 2 characters.",
+    "addressMin": "Please enter a full address.",
+    "ibanMin": "Please enter a valid IBAN.",
+    "codeLength": "The code must be 12 characters.",
+    "millièmesMin": "Shares must be greater than 0.",
+    "millièmesMinZero": "Shares must be 0 or more.",
+    "amountRequired": "Please enter an amount.",
+    "dateRequired": "Please enter a date.",
+    "reasonRequired": "Please enter a reason."
   },
   "nav": {
     "dashboard": "Dashboard",

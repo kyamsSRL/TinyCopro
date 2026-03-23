@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { CalendarDays, Download, Plus, Lock } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { closeExercice as closeExerciceService, createExercice as createExerciceService, listExercices as listExercicesService, getExportData } from '@/services/exercice';
 import { useCoproContext } from '@/components/copro/CoproContext';
 import { logAudit } from '@/lib/audit';
 import { AuditLog } from '@/components/audit/AuditLog';
@@ -54,11 +54,7 @@ export function ParametresPageContent() {
     if (!copro) return;
     setLoading(true);
 
-    const { data } = await supabase
-      .from('exercices')
-      .select('*')
-      .eq('copropriete_id', copro.id)
-      .order('annee', { ascending: false });
+    const { data } = await listExercicesService(copro.id);
 
     if (data) setExercices(data);
     setLoading(false);
@@ -69,88 +65,15 @@ export function ParametresPageContent() {
   }, [fetchExercices]);
 
   const handleCloseExercice = async () => {
-    if (!copro || !exercice || !user) return;
+    if (!copro || !exercice) return;
     setIsClosing(true);
 
     try {
-      // Close current exercice
-      const { error: closeError } = await supabase
-        .from('exercices')
-        .update({ statut: 'cloture' })
-        .eq('id', exercice.id);
+      const { error } = await closeExerciceService({ coproId: copro.id, exerciceId: exercice.id });
 
-      if (closeError) {
-        toast.error(tc('error'));
+      if (error) {
+        toast.error(error.message || tc('error'));
         return;
-      }
-
-      // Create next exercice
-      const nextYear = exercice.annee + 1;
-      const { data: newExercice, error: createError } = await supabase
-        .from('exercices')
-        .insert({
-          copropriete_id: copro.id,
-          annee: nextYear,
-          date_debut: `${nextYear}-01-01`,
-          date_fin: `${nextYear}-12-31`,
-          statut: 'ouvert',
-        })
-        .select()
-        .single();
-
-      if (createError || !newExercice) {
-        toast.error(tc('error'));
-        return;
-      }
-
-      // Duplicate recurring expenses
-      const { data: recurringDepenses } = await supabase
-        .from('depenses')
-        .select('*')
-        .eq('exercice_id', exercice.id)
-        .eq('copropriete_id', copro.id)
-        .eq('is_recurrence_active', true)
-        .neq('frequence', 'unique');
-
-      if (recurringDepenses && recurringDepenses.length > 0) {
-        for (const dep of recurringDepenses) {
-          const { data: newDep } = await supabase
-            .from('depenses')
-            .insert({
-              libelle: dep.libelle,
-              montant_total: dep.montant_total,
-              date_depense: dep.date_depense.replace(String(exercice.annee), String(nextYear)),
-              description: dep.description,
-              categorie_id: dep.categorie_id,
-              frequence: dep.frequence,
-              copropriete_id: copro.id,
-              exercice_id: newExercice.id,
-              created_by: user.id,
-              is_recurrence_active: true,
-              justificatif_urls: null,
-            })
-            .select()
-            .single();
-
-          // Create repartitions for duplicated expense
-          if (newDep) {
-            const { calculateRepartition } = await import('@/lib/milliemes');
-            const repartitions = calculateRepartition(
-              newDep.montant_total,
-              membres.map(m => ({ id: m.id, milliemes: m.milliemes }))
-            );
-
-            if (repartitions.length > 0) {
-              await supabase.from('repartitions').insert(
-                repartitions.map(r => ({
-                  depense_id: newDep.id,
-                  membre_id: r.membre_id,
-                  montant_du: r.montant_du,
-                }))
-              );
-            }
-          }
-        }
       }
 
       logAudit({
@@ -183,13 +106,7 @@ export function ParametresPageContent() {
         : new Date().getFullYear() - 1;
       const nextYear = latestYear + 1;
 
-      const { error } = await supabase.from('exercices').insert({
-        copropriete_id: copro.id,
-        annee: nextYear,
-        date_debut: `${nextYear}-01-01`,
-        date_fin: `${nextYear}-12-31`,
-        statut: 'ouvert',
-      });
+      const { error } = await createExerciceService(copro.id, nextYear);
 
       if (error) {
         toast.error(tc('error'));
@@ -210,40 +127,26 @@ export function ParametresPageContent() {
     setIsExporting(true);
 
     try {
-      // Fetch depenses with repartitions for this exercice
-      const { data: depenses } = await supabase
-        .from('depenses')
-        .select('*, categories_depenses(nom), repartitions(*, membres(*, profiles(*)))')
-        .eq('copropriete_id', copro.id)
-        .eq('exercice_id', exerciceToExport.id)
-        .order('date_depense', { ascending: true });
+      const { data: depenses } = await getExportData(copro.id, exerciceToExport.id);
 
       if (!depenses || depenses.length === 0) {
         toast.error(tc('noResults'));
         return;
       }
 
-      // Build CSV data: one row per repartition
       const csvData: Record<string, unknown>[] = [];
 
-      for (const dep of depenses as unknown as (Depense & {
-        categories_depenses: { nom: string } | null;
-        repartitions: (Repartition & {
-          membres: Tables<'membres'> & { profiles: Tables<'profiles'> };
-        })[];
-      })[]) {
-        for (const rep of dep.repartitions) {
+      for (const dep of depenses as any[]) {
+        for (const rep of (dep.repartitions || [])) {
           csvData.push({
             'Depense': dep.libelle,
             'Date': dep.date_depense,
             'Montant Total': dep.montant_total,
-            'Categorie': dep.categories_depenses?.nom ?? '',
+            'Categorie': dep.categorie ?? '',
             'Frequence': dep.frequence,
-            'Membre': `${rep.membres.profiles.prenom} ${rep.membres.profiles.nom}`,
-            'Milliemes': rep.membres.milliemes,
+            'Membre': `${rep.membre_prenom} ${rep.membre_nom}`,
             'Montant Du': rep.montant_du,
             'Montant Override': rep.montant_override ?? '',
-            'Motif Override': rep.motif_override ?? '',
             'Statut': rep.statut,
           });
         }

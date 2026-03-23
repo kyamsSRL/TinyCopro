@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { FileDown } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { logAudit } from '@/lib/audit';
 import { sendNotification } from '@/lib/notifications';
+import { generatePayment, getRepartitionsEnCours } from '@/services/paiement';
 import { useCoproContext } from '@/components/copro/CoproContext';
 import { generatePaymentPdf, downloadBlob } from '@/lib/pdf-generator';
 import type { PdfPaymentData } from '@/lib/pdf-generator';
@@ -46,11 +46,7 @@ export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
     if (!currentMembre) return;
     setLoading(true);
 
-    const { data } = await supabase
-      .from('repartitions')
-      .select('*, depenses(*)')
-      .eq('membre_id', currentMembre.id)
-      .eq('statut', 'en_cours');
+    const { data } = await getRepartitionsEnCours(currentMembre.id);
 
     if (data) setRepartitions(data as unknown as RepartitionWithDepense[]);
     setLoading(false);
@@ -91,53 +87,20 @@ export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
 
     setIsGenerating(true);
     try {
-      const reference = `AP-${Date.now().toString(36).toUpperCase()}`;
+      // Create payment via RPC (atomic)
+      const { data: paymentResult, error: paymentError } = await generatePayment({
+        coproId: copro.id,
+        membreId: currentMembre.id,
+        repartitionIds: selectedRepartitions.map(r => r.id),
+        createdBy: user.id,
+      });
 
-      // Create appel_paiement
-      const { data: appel, error: appelError } = await supabase
-        .from('appels_paiement')
-        .insert({
-          copropriete_id: copro.id,
-          membre_id: currentMembre.id,
-          montant_total: total,
-          reference,
-          created_by: user.id,
-          statut: 'en_cours',
-        })
-        .select()
-        .single();
-
-      if (appelError || !appel) {
-        toast.error(tc('error'));
+      if (paymentError || !paymentResult) {
+        toast.error(paymentError?.message || tc('error'));
         return;
       }
 
-      // Link repartitions to appel
-      const { error: linkError } = await supabase.from('appel_repartitions').insert(
-        selectedRepartitions.map(r => ({
-          appel_id: appel.id,
-          repartition_id: r.id,
-        }))
-      );
-
-      if (linkError) {
-        toast.error(tc('error'));
-        return;
-      }
-
-      // Update repartition statuts
-      const { error: updateError } = await supabase
-        .from('repartitions')
-        .update({ statut: 'en_cours_paiement' })
-        .in(
-          'id',
-          selectedRepartitions.map(r => r.id)
-        );
-
-      if (updateError) {
-        toast.error(tc('error'));
-        return;
-      }
+      const reference = paymentResult.reference;
 
       // Generate PDF
       const pdfData: PdfPaymentData = {
@@ -164,8 +127,8 @@ export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
         coproprieteId: copro.id,
         action: 'create',
         entityType: 'appel_paiement',
-        entityId: appel.id,
-        details: { reference, montant: total },
+        entityId: paymentResult.appel_id,
+        details: { reference, montant: paymentResult.montant_total },
       });
 
       const gestionnaireEmails = membres

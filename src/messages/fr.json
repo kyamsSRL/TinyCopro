@@ -91,7 +91,11 @@
     "codeInvalide": "Code invalide ou expiré.",
     "dejaMembre": "Vous êtes déjà membre de cette copropriété.",
     "expiration": "Expiration",
-    "copierCode": "Copier le code"
+    "copierCode": "Copier le code",
+    "invitationEmail": "Adresse email",
+    "copyLink": "Copier le lien",
+    "sendByEmail": "Envoyer par email",
+    "linkCopied": "Lien copié !"
   },
   "depenses": {
     "title": "Dépenses",
@@ -172,6 +176,21 @@
     "date": "Date",
     "details": "Détails",
     "noEntries": "Aucune entrée dans le journal."
+  },
+  "validation": {
+    "required": "Ce champ est obligatoire.",
+    "emailInvalid": "Adresse email invalide.",
+    "passwordMin": "Le mot de passe doit contenir au moins 6 caractères.",
+    "passwordMismatch": "Les mots de passe ne correspondent pas.",
+    "nameMin": "Minimum 2 caractères.",
+    "addressMin": "Veuillez saisir une adresse complète.",
+    "ibanMin": "Veuillez saisir un IBAN valide.",
+    "codeLength": "Le code doit contenir 12 caractères.",
+    "millièmesMin": "Les millièmes doivent être supérieurs à 0.",
+    "millièmesMinZero": "Les millièmes doivent être positifs ou nuls.",
+    "amountRequired": "Veuillez saisir un montant.",
+    "dateRequired": "Veuillez saisir une date.",
+    "reasonRequired": "Veuillez saisir un motif."
   },
   "nav": {
     "dashboard": "Tableau de bord",

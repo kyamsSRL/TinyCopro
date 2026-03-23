@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
-import { Plus, ChevronDown, ChevronRight, Settings, FileText, Image as ImageIcon } from 'lucide-react';
+import { Plus, Settings, FileText, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useCoproContext } from '@/components/copro/CoproContext';
 import { DepenseForm } from '@/components/depenses/DepenseForm';
@@ -10,14 +10,6 @@ import { CategoryManager } from '@/components/depenses/CategoryManager';
 import { OverrideDialog } from '@/components/depenses/OverrideDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableHead,
-  TableRow,
-  TableCell,
-} from '@/components/ui/table';
 import {
   Select,
   SelectTrigger,
@@ -29,13 +21,9 @@ import {
   Dialog,
   DialogTrigger,
   DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import type { Tables, Enums } from '@/types/database.types';
 
 type Depense = Tables<'depenses'>;
@@ -321,8 +309,7 @@ export function DepensesPageContent() {
           {t('noDepenses')}
         </div>
       ) : (<>
-        {/* Mobile cards */}
-        <div className="md:hidden space-y-2">
+        <div className="grid gap-2 md:grid-cols-2">
           {filteredDepenses.map(dep => (
             <div
               key={dep.id}
@@ -334,65 +321,28 @@ export function DepensesPageContent() {
                 {getStatusBadge(getDepenseStatus(dep))}
               </div>
               <div className="flex items-center justify-between mt-1">
-                <span className="text-xs text-muted-foreground">{dep.date_depense}</span>
+                <span className="text-xs text-muted-foreground">{dep.date_depense} · {dep.categories_depenses?.nom ?? '-'}</span>
                 <span className="text-sm font-medium">{dep.montant_total.toFixed(2)} {copro?.devise}</span>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('label')}</TableHead>
-                <TableHead>{t('amount')}</TableHead>
-                <TableHead>{t('date')}</TableHead>
-                <TableHead>{t('category')}</TableHead>
-                <TableHead>{t('recurrence')}</TableHead>
-                <TableHead>{t('status')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredDepenses.map(dep => (
-                <TableRow
-                  key={dep.id}
-                  className="cursor-pointer"
-                  onClick={() => setSelectedDepense(dep)}
-                >
-                  <TableCell className="font-medium">{dep.libelle}</TableCell>
-                  <TableCell>{dep.montant_total.toFixed(2)} {copro?.devise}</TableCell>
-                  <TableCell>{dep.date_depense}</TableCell>
-                  <TableCell>{dep.categories_depenses?.nom ?? '-'}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{t(dep.frequence)}</Badge>
-                  </TableCell>
-                  <TableCell>{getStatusBadge(getDepenseStatus(dep))}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Detail sheet (bottom on mobile, right on desktop) */}
-        <Sheet open={!!selectedDepense} onOpenChange={(open) => { if (!open) setSelectedDepense(null); }}>
-          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+        <Dialog open={!!selectedDepense} onOpenChange={(open) => { if (!open) setSelectedDepense(null); }}>
+          <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
             {selectedDepense && (
               <>
-                <SheetHeader>
-                  <SheetTitle className="flex items-center justify-between gap-2">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center justify-between gap-2">
                     <span>{selectedDepense.libelle}</span>
                     <span className="text-base">{selectedDepense.montant_total.toFixed(2)} {copro?.devise}</span>
-                  </SheetTitle>
-                </SheetHeader>
-                <div className="px-4 pb-6">
-                  {renderDepenseDetail(selectedDepense)}
-                </div>
+                  </DialogTitle>
+                </DialogHeader>
+                {renderDepenseDetail(selectedDepense)}
               </>
             )}
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
       </>)}
     </div>
   );

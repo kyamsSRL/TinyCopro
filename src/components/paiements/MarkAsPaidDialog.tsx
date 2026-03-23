@@ -6,11 +6,13 @@ import { Paperclip, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { createMarkPaidSchema } from '@/lib/validation';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { logAudit } from '@/lib/audit';
 import { sendNotification } from '@/lib/notifications';
+import { markAsPaid as markAsPaidService, uploadProof } from '@/services/paiement';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,13 +29,6 @@ import type { Tables } from '@/types/database.types';
 
 type AppelPaiement = Tables<'appels_paiement'>;
 
-const markPaidSchema = z.object({
-  date_paiement: z.string().min(1, 'Date is required'),
-  reference: z.string().optional(),
-});
-
-type MarkPaidFormValues = z.infer<typeof markPaidSchema>;
-
 interface MarkAsPaidDialogProps {
   appel: AppelPaiement;
   coproprieteId?: string;
@@ -45,7 +40,12 @@ interface MarkAsPaidDialogProps {
 export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess, children }: MarkAsPaidDialogProps) {
   const t = useTranslations('paiements');
   const tc = useTranslations('common');
+  const tv = useTranslations('validation');
   const { user } = useAuth();
+
+  const markPaidSchema = createMarkPaidSchema(tv);
+  type MarkPaidFormValues = z.infer<typeof markPaidSchema>;
+
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [proofFile, setProofFile] = useState<File | null>(null);
@@ -72,65 +72,26 @@ export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess,
       // Upload proof file if provided
       let preuveUrl: string | null = null;
       if (proofFile && coproprieteId) {
-        const ext = proofFile.name.split('.').pop();
-        const filePath = `${coproprieteId}/preuves/${crypto.randomUUID()}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from('justificatifs')
-          .upload(filePath, proofFile);
-        if (uploadError) {
-          toast.error(uploadError.message);
+        const result = await uploadProof({ paiementId: '', coproId: coproprieteId, file: proofFile });
+        if (result.error) {
+          toast.error(result.error.message);
           return;
         }
-        const { data: { publicUrl } } = supabase.storage
-          .from('justificatifs')
-          .getPublicUrl(filePath);
-        preuveUrl = publicUrl;
+        preuveUrl = result.publicUrl ?? null;
       }
 
-      // Insert paiement record
-      const { error: paiementError } = await supabase.from('paiements').insert({
-        appel_id: appel.id,
-        montant_paye: appel.montant_total,
-        date_paiement: values.date_paiement,
-        reference: values.reference || null,
-        confirmed_by: user.id,
-        methode: 'virement',
-        preuve_paiement_url: preuveUrl,
+      // Mark as paid (atomic: insert paiement + update appel + update repartitions)
+      const { error: rpcError } = await markAsPaidService({
+        appelId: appel.id,
+        datePaiement: values.date_paiement,
+        reference: values.reference || undefined,
+        preuvePaiementUrl: preuveUrl || undefined,
+        confirmedBy: user.id,
       });
 
-      if (paiementError) {
-        toast.error(tc('error'));
+      if (rpcError) {
+        toast.error(rpcError.message || tc('error'));
         return;
-      }
-
-      // Update appel statut
-      const { error: appelError } = await supabase
-        .from('appels_paiement')
-        .update({ statut: 'paye' })
-        .eq('id', appel.id);
-
-      if (appelError) {
-        toast.error(tc('error'));
-        return;
-      }
-
-      // Get linked repartition IDs
-      const { data: links } = await supabase
-        .from('appel_repartitions')
-        .select('repartition_id')
-        .eq('appel_id', appel.id);
-
-      if (links && links.length > 0) {
-        const repIds = links.map(l => l.repartition_id);
-        const { error: repError } = await supabase
-          .from('repartitions')
-          .update({ statut: 'paye' })
-          .in('id', repIds);
-
-        if (repError) {
-          toast.error(tc('error'));
-          return;
-        }
       }
 
       if (coproprieteId) {

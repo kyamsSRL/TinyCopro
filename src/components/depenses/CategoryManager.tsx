@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useCoproContext } from '@/components/copro/CoproContext';
+import { listCategories, addCategory, deleteCategory } from '@/services/depense';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -27,13 +27,8 @@ export function CategoryManager() {
   const fetchCategories = useCallback(async () => {
     if (!copro) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('categories_depenses')
-      .select('*')
-      .or(`is_global.eq.true,copropriete_id.eq.${copro.id}`)
-      .order('is_global', { ascending: false })
-      .order('nom');
-    if (data) setCategories(data);
+    const { data } = await listCategories(copro.id);
+    if (data) setCategories(data as Category[]);
     setLoading(false);
   }, [copro]);
 
@@ -43,15 +38,9 @@ export function CategoryManager() {
 
   const handleAddCategory = async () => {
     if (!copro || !newCategoryName.trim()) return;
-
     setIsAdding(true);
     try {
-      const { error } = await supabase.from('categories_depenses').insert({
-        nom: newCategoryName.trim(),
-        copropriete_id: copro.id,
-        is_global: false,
-      });
-
+      const { error } = await addCategory(copro.id, newCategoryName.trim());
       if (error) {
         toast.error(tc('error'));
       } else {
@@ -68,13 +57,8 @@ export function CategoryManager() {
 
   const handleDeleteCategory = async (category: Category) => {
     if (category.is_global) return;
-
     try {
-      const { error } = await supabase
-        .from('categories_depenses')
-        .delete()
-        .eq('id', category.id);
-
+      const { error } = await deleteCategory(category.id);
       if (error) {
         toast.error(tc('error'));
       } else {
