@@ -90,25 +90,9 @@ export function CreateInvitationDialog({ onSuccess, children }: CreateInvitation
       const expiresAt = new Date();
       expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
-      // 1. Create invitation first (without membre_id to avoid circular FK)
-      const invitationId = crypto.randomUUID();
       const membreId = crypto.randomUUID();
 
-      const { error: inviteError } = await supabase.from('invitations').insert({
-        id: invitationId,
-        copropriete_id: copro.id,
-        created_by: user.id,
-        code,
-        expires_at: expiresAt.toISOString(),
-      });
-
-      if (inviteError) {
-        setError(inviteError.message);
-        setIsSubmitting(false);
-        return;
-      }
-
-      // 2. Create placeholder membre (user_id = NULL)
+      // 1. Create placeholder membre with invitation fields
       const { error: membreError } = await supabase.from('membres').insert({
         id: membreId,
         copropriete_id: copro.id,
@@ -117,25 +101,34 @@ export function CreateInvitationDialog({ onSuccess, children }: CreateInvitation
         milliemes: 0,
         alias: values.alias,
         date_adhesion: values.date_adhesion,
-        invitation_id: invitationId,
+        invitation_code: code,
+        invitation_expires_at: expiresAt.toISOString(),
       });
 
       if (membreError) {
-        // Rollback invitation
-        await supabase.from('invitations').delete().eq('id', invitationId);
         setError(membreError.message);
         setIsSubmitting(false);
         return;
       }
 
-      // 3. Update invitation with membre_id (back-link)
-      await supabase.from('invitations').update({ membre_id: membreId }).eq('id', invitationId);
+      // 2. Create retroactive repartitions for existing depenses after date_adhesion
+      const { data: depenses } = await supabase
+        .from('depenses')
+        .select('id')
+        .eq('copropriete_id', copro.id)
+        .gte('date_depense', values.date_adhesion);
+
+      if (depenses && depenses.length > 0) {
+        await supabase.from('repartitions').insert(
+          depenses.map(d => ({ depense_id: d.id, membre_id: membreId, montant_du: 0 }))
+        );
+      }
 
       logAudit({
         coproprieteId: copro.id,
         action: 'create_invitation',
-        entityType: 'invitation',
-        entityId: invitationId,
+        entityType: 'membre',
+        entityId: membreId,
         details: { alias: values.alias, date_adhesion: values.date_adhesion },
       });
 

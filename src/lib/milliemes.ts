@@ -19,10 +19,13 @@ export function calculateRepartition(
   membres: Pick<Membre, 'id' | 'milliemes'>[]
 ): RepartitionResult[] {
   const activeMembres = membres.filter(m => m.milliemes > 0);
-  if (activeMembres.length === 0) return [];
+  const zeroMembres = membres.filter(m => m.milliemes === 0).map(m => ({
+    membre_id: m.id,
+    montant_du: 0,
+  }));
 
   const totalMilliemes = activeMembres.reduce((sum, m) => sum + m.milliemes, 0);
-  if (totalMilliemes === 0) return [];
+  if (totalMilliemes === 0) return zeroMembres;
 
   const results: RepartitionResult[] = activeMembres.map(m => ({
     membre_id: m.id,
@@ -36,12 +39,6 @@ export function calculateRepartition(
     results[results.length - 1].montant_du =
       Math.round((results[results.length - 1].montant_du + diff) * 100) / 100;
   }
-
-  // Also include 0-milliemes members with 0 amount
-  const zeroMembres = membres.filter(m => m.milliemes === 0).map(m => ({
-    membre_id: m.id,
-    montant_du: 0,
-  }));
 
   return [...results, ...zeroMembres];
 }

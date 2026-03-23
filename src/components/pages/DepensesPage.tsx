@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useTranslations } from 'next-intl';
-import { Plus, ChevronDown, ChevronRight, Settings } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Settings, FileText, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useCoproContext } from '@/components/copro/CoproContext';
 import { DepenseForm } from '@/components/depenses/DepenseForm';
@@ -30,6 +30,12 @@ import {
   DialogTrigger,
   DialogContent,
 } from '@/components/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import type { Tables, Enums } from '@/types/database.types';
 
 type Depense = Tables<'depenses'>;
@@ -51,11 +57,11 @@ export function DepensesPageContent() {
   const [depenses, setDepenses] = useState<DepenseWithRelations[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [addOpen, setAddOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
+  const [selectedDepense, setSelectedDepense] = useState<DepenseWithRelations | null>(null);
 
   const fetchDepenses = useCallback(async () => {
     if (!copro || !exercice) return;
@@ -91,18 +97,6 @@ export function DepensesPageContent() {
     fetchCategories();
   }, [fetchDepenses, fetchCategories]);
 
-  const toggleRow = (id: string) => {
-    setExpandedRows(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
   const getStatusBadge = (statut: Enums<'statut_paiement'>) => {
     switch (statut) {
       case 'en_cours':
@@ -123,15 +117,14 @@ export function DepensesPageContent() {
     return membre.alias || '--';
   };
 
-  // Compute the dominant status for the depense from its repartitions
   const getDepenseStatus = (depense: DepenseWithRelations): Enums<'statut_paiement'> => {
     const statuts = depense.repartitions.map(r => r.statut);
+    if (statuts.length === 0) return 'en_cours';
     if (statuts.every(s => s === 'paye')) return 'paye';
     if (statuts.some(s => s === 'en_cours_paiement')) return 'en_cours_paiement';
     return 'en_cours';
   };
 
-  // Filter depenses
   const filteredDepenses = depenses.filter(dep => {
     if (filterCategory !== 'all' && dep.categorie_id !== filterCategory) return false;
     if (filterStatus !== 'all' && getDepenseStatus(dep) !== filterStatus) return false;
@@ -142,6 +135,101 @@ export function DepensesPageContent() {
     setAddOpen(false);
     fetchDepenses();
   };
+
+  // Shared detail content for both sheet and expanded row
+  const renderDepenseDetail = (dep: DepenseWithRelations) => (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 text-sm">
+        <Badge variant="outline">{dep.date_depense}</Badge>
+        {dep.categories_depenses && <Badge variant="outline">{dep.categories_depenses.nom}</Badge>}
+        <Badge variant="outline">{t(dep.frequence)}</Badge>
+        {getStatusBadge(getDepenseStatus(dep))}
+      </div>
+
+      {dep.description && (
+        <p className="text-sm text-muted-foreground">{dep.description}</p>
+      )}
+
+      {dep.justificatif_urls && dep.justificatif_urls.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('files')}</p>
+          <div className="flex flex-wrap gap-2">
+            {dep.justificatif_urls.map((url, i) => {
+              const fileName = decodeURIComponent(url.split('/').pop() || `file-${i + 1}`);
+              const isImage = /\.(jpg|jpeg|png|webp)$/i.test(url);
+              return (
+                <a
+                  key={i}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs bg-background border rounded-md px-2 py-1 hover:bg-accent transition-colors"
+                >
+                  {isImage ? <ImageIcon className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+                  <span className="max-w-[150px] truncate">{fileName}</span>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-muted-foreground">Répartitions</p>
+        <div className="space-y-1">
+          {dep.repartitions.map(rep => {
+            const effectiveAmount = rep.montant_override ?? rep.montant_du;
+            const name = getMemberName(rep.membres);
+            const sumOther = dep.repartitions
+              .filter(r => r.id !== rep.id)
+              .reduce((s, r) => s + (r.montant_override ?? r.montant_du), 0);
+            return (
+              <div key={rep.id} className="flex items-center justify-between py-1.5 border-b border-dashed last:border-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm truncate">{name}</span>
+                  {getStatusBadge(rep.statut)}
+                </div>
+                <div className="text-sm font-medium shrink-0 ml-2">
+                  {isGestionnaire ? (
+                    <OverrideDialog
+                      repartition={rep}
+                      memberName={name}
+                      coproprieteId={copro?.id}
+                      onSuccess={() => { fetchDepenses(); setSelectedDepense(null); }}
+                    >
+                      <span className="underline decoration-dashed cursor-pointer hover:text-primary">
+                        {effectiveAmount.toFixed(2)} {copro?.devise}
+                        {rep.montant_override !== null && (
+                          <span className="ml-1 text-xs text-muted-foreground">(mod.)</span>
+                        )}
+                      </span>
+                    </OverrideDialog>
+                  ) : (
+                    <span>
+                      {effectiveAmount.toFixed(2)} {copro?.devise}
+                      {rep.montant_override !== null && (
+                        <span className="ml-1 text-xs text-muted-foreground">(mod.)</span>
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {dep.repartitions.some(r => r.motif_override) && (
+        <div className="text-xs text-muted-foreground">
+          {dep.repartitions
+            .filter(r => r.motif_override)
+            .map(r => (
+              <p key={r.id}>{getMemberName(r.membres)}: {r.motif_override}</p>
+            ))}
+        </div>
+      )}
+    </div>
+  );
 
   if (loading) {
     return (
@@ -196,7 +284,10 @@ export function DepensesPageContent() {
           <span className="text-sm text-muted-foreground whitespace-nowrap">{t('filterByCategory')}:</span>
           <Select value={filterCategory} onValueChange={(v) => setFilterCategory(v ?? 'all')}>
             <SelectTrigger>
-              <SelectValue />
+              {filterCategory !== 'all'
+                ? <span data-slot="select-value" className="flex flex-1 text-left">{categories.find(c => c.id === filterCategory)?.nom}</span>
+                : <SelectValue />
+              }
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">--</SelectItem>
@@ -229,34 +320,47 @@ export function DepensesPageContent() {
         <div className="text-center py-12 text-muted-foreground">
           {t('noDepenses')}
         </div>
-      ) : (
-        <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-8" />
-              <TableHead>{t('label')}</TableHead>
-              <TableHead>{t('amount')}</TableHead>
-              <TableHead>{t('date')}</TableHead>
-              <TableHead>{t('category')}</TableHead>
-              <TableHead>{t('recurrence')}</TableHead>
-              <TableHead>{t('status')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredDepenses.map(dep => (
-              <Fragment key={dep.id}>
+      ) : (<>
+        {/* Mobile cards */}
+        <div className="md:hidden space-y-2">
+          {filteredDepenses.map(dep => (
+            <div
+              key={dep.id}
+              className="border rounded-lg p-3 cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors"
+              onClick={() => setSelectedDepense(dep)}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-sm truncate">{dep.libelle}</span>
+                {getStatusBadge(getDepenseStatus(dep))}
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs text-muted-foreground">{dep.date_depense}</span>
+                <span className="text-sm font-medium">{dep.montant_total.toFixed(2)} {copro?.devise}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('label')}</TableHead>
+                <TableHead>{t('amount')}</TableHead>
+                <TableHead>{t('date')}</TableHead>
+                <TableHead>{t('category')}</TableHead>
+                <TableHead>{t('recurrence')}</TableHead>
+                <TableHead>{t('status')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredDepenses.map(dep => (
                 <TableRow
+                  key={dep.id}
                   className="cursor-pointer"
-                  onClick={() => toggleRow(dep.id)}
+                  onClick={() => setSelectedDepense(dep)}
                 >
-                  <TableCell>
-                    {expandedRows.has(dep.id) ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                  </TableCell>
                   <TableCell className="font-medium">{dep.libelle}</TableCell>
                   <TableCell>{dep.montant_total.toFixed(2)} {copro?.devise}</TableCell>
                   <TableCell>{dep.date_depense}</TableCell>
@@ -266,91 +370,30 @@ export function DepensesPageContent() {
                   </TableCell>
                   <TableCell>{getStatusBadge(getDepenseStatus(dep))}</TableCell>
                 </TableRow>
-                {expandedRows.has(dep.id) && (
-                  <TableRow key={`${dep.id}-detail`}>
-                    <TableCell colSpan={7}>
-                      <div className="py-2 px-4 bg-muted/30 rounded-lg">
-                        {dep.description && (
-                          <p className="text-sm text-muted-foreground mb-3">
-                            {dep.description}
-                          </p>
-                        )}
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b">
-                              <th className="text-left py-1 font-medium">Membre</th>
-                              <th className="text-right py-1 font-medium">{t('amount')}</th>
-                              <th className="text-right py-1 font-medium">{t('override')}</th>
-                              <th className="text-center py-1 font-medium">{t('status')}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {dep.repartitions.map(rep => {
-                              const effectiveAmount = rep.montant_override ?? rep.montant_du;
-                              const name = getMemberName(rep.membres);
-                              return (
-                                <tr key={rep.id} className="border-b border-dashed">
-                                  <td className="py-1">{name}</td>
-                                  <td className="text-right py-1">
-                                    {rep.montant_du.toFixed(2)} {copro?.devise}
-                                  </td>
-                                  <td className="text-right py-1">
-                                    {isGestionnaire ? (
-                                      <OverrideDialog
-                                        repartition={rep}
-                                        memberName={name}
-                                        coproprieteId={copro?.id}
-                                        onSuccess={fetchDepenses}
-                                      >
-                                        <span className="underline decoration-dashed cursor-pointer hover:text-primary">
-                                          {effectiveAmount.toFixed(2)} {copro?.devise}
-                                          {rep.montant_override !== null && (
-                                            <span className="ml-1 text-xs text-muted-foreground">
-                                              (modifie)
-                                            </span>
-                                          )}
-                                        </span>
-                                      </OverrideDialog>
-                                    ) : (
-                                      <span>
-                                        {effectiveAmount.toFixed(2)} {copro?.devise}
-                                        {rep.montant_override !== null && (
-                                          <span className="ml-1 text-xs text-muted-foreground">
-                                            (modifie)
-                                          </span>
-                                        )}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="text-center py-1">
-                                    {getStatusBadge(rep.statut)}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                        {dep.repartitions.some(r => r.motif_override) && (
-                          <div className="mt-2 text-xs text-muted-foreground">
-                            {dep.repartitions
-                              .filter(r => r.motif_override)
-                              .map(r => (
-                                <p key={r.id}>
-                                  {getMemberName(r.membres)}: {r.motif_override}
-                                </p>
-                              ))}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </Fragment>
-            ))}
-          </TableBody>
-        </Table>
+              ))}
+            </TableBody>
+          </Table>
         </div>
-      )}
+
+        {/* Detail sheet (bottom on mobile, right on desktop) */}
+        <Sheet open={!!selectedDepense} onOpenChange={(open) => { if (!open) setSelectedDepense(null); }}>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+            {selectedDepense && (
+              <>
+                <SheetHeader>
+                  <SheetTitle className="flex items-center justify-between gap-2">
+                    <span>{selectedDepense.libelle}</span>
+                    <span className="text-base">{selectedDepense.montant_total.toFixed(2)} {copro?.devise}</span>
+                  </SheetTitle>
+                </SheetHeader>
+                <div className="px-4 pb-6">
+                  {renderDepenseDetail(selectedDepense)}
+                </div>
+              </>
+            )}
+          </SheetContent>
+        </Sheet>
+      </>)}
     </div>
   );
 }

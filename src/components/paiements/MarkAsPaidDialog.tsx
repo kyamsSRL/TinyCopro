@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import { Paperclip, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -47,6 +48,8 @@ export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess,
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -66,6 +69,24 @@ export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess,
     setIsSubmitting(true);
 
     try {
+      // Upload proof file if provided
+      let preuveUrl: string | null = null;
+      if (proofFile && coproprieteId) {
+        const ext = proofFile.name.split('.').pop();
+        const filePath = `${coproprieteId}/preuves/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('justificatifs')
+          .upload(filePath, proofFile);
+        if (uploadError) {
+          toast.error(uploadError.message);
+          return;
+        }
+        const { data: { publicUrl } } = supabase.storage
+          .from('justificatifs')
+          .getPublicUrl(filePath);
+        preuveUrl = publicUrl;
+      }
+
       // Insert paiement record
       const { error: paiementError } = await supabase.from('paiements').insert({
         appel_id: appel.id,
@@ -74,6 +95,7 @@ export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess,
         reference: values.reference || null,
         confirmed_by: user.id,
         methode: 'virement',
+        preuve_paiement_url: preuveUrl,
       });
 
       if (paiementError) {
@@ -150,6 +172,7 @@ export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess,
             date_paiement: new Date().toISOString().split('T')[0],
             reference: '',
           });
+          setProofFile(null);
         }
       }}
     >
@@ -184,6 +207,50 @@ export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess,
               {...register('reference')}
               placeholder={t('paymentReference')}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>{t('proofOfPayment')}</Label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
+                  if (allowed.includes(file.type)) {
+                    setProofFile(file);
+                  } else {
+                    toast.error(t('fileTypeError'));
+                  }
+                }
+                e.target.value = '';
+              }}
+            />
+            {proofFile ? (
+              <div className="flex items-center justify-between text-sm bg-muted/50 rounded px-2 py-1">
+                <span className="truncate mr-2">{proofFile.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setProofFile(null)}
+                  className="text-muted-foreground hover:text-destructive shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-start gap-2 text-muted-foreground"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Paperclip className="h-4 w-4" />
+                {t('addProof')}
+              </Button>
+            )}
           </div>
 
           <DialogFooter>

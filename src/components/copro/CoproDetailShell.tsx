@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -9,10 +10,18 @@ import {
   CreditCard,
   Users,
   Settings,
+  Menu,
 } from 'lucide-react';
 import { useCoproDetail } from '@/hooks/useCopro';
 import { CoproContext } from '@/components/copro/CoproContext';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -27,6 +36,7 @@ export function CoproDetailShell({ children }: { children: React.ReactNode }) {
   const params = useParams();
   const pathname = usePathname();
   const t = useTranslations('copro');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // In static export, useParams().slug may be [] even when the URL has segments.
   // Parse from pathname as fallback.
@@ -85,7 +95,8 @@ export function CoproDetailShell({ children }: { children: React.ReactNode }) {
         <Separator />
 
         <div className="flex flex-col md:flex-row gap-6 mt-6">
-          <nav className="flex md:flex-col gap-1 md:w-48 shrink-0 overflow-x-auto md:overflow-x-visible">
+          {/* Desktop sidebar */}
+          <nav className="hidden md:flex md:flex-col gap-1 md:w-48 shrink-0">
             {navItems.map((item) => {
               const href = `${basePath}${item.segment}`;
               const isActive =
@@ -111,6 +122,51 @@ export function CoproDetailShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
+
+          {/* Mobile floating menu */}
+          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+            <SheetContent side="left">
+              <SheetHeader>
+                <SheetTitle>{copro.nom}</SheetTitle>
+              </SheetHeader>
+              <nav className="flex flex-col gap-1 px-4">
+                {navItems.map((item) => {
+                  const href = `${basePath}${item.segment}`;
+                  const isActive =
+                    item.segment === ''
+                      ? pathname === basePath || pathname === `${basePath}/`
+                      : pathname.startsWith(href);
+                  const Icon = item.icon;
+
+                  return (
+                    <Link
+                      key={item.key}
+                      href={href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      )}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" />
+                      {t(item.key)}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </SheetContent>
+          </Sheet>
+
+          <Button
+            variant="outline"
+            size="icon"
+            className="fixed bottom-4 left-4 z-50 md:hidden h-12 w-12 rounded-full shadow-lg"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
 
           <div className="flex-1 min-w-0">{children}</div>
         </div>

@@ -135,7 +135,10 @@
     "history": "Betalingsgeschiedenis",
     "noPaiements": "Geen betalingen geregistreerd.",
     "confirmPayment": "Betaling bevestigen",
-    "paidDate": "Betaaldatum"
+    "paidDate": "Betaaldatum",
+    "proofOfPayment": "Betalingsbewijs",
+    "addProof": "Bewijs bijvoegen",
+    "fileTypeError": "Niet-ondersteund formaat. Alleen PDF-, JPEG- en PNG-bestanden zijn toegestaan."
   },
   "dashboard": {
     "totalDue": "Totaal verschuldigd",

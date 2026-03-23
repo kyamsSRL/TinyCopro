@@ -135,7 +135,10 @@
     "history": "Payment history",
     "noPaiements": "No payments recorded.",
     "confirmPayment": "Confirm payment",
-    "paidDate": "Payment date"
+    "paidDate": "Payment date",
+    "proofOfPayment": "Proof of payment",
+    "addProof": "Attach proof",
+    "fileTypeError": "Unsupported format. Only PDF, JPEG and PNG files are allowed."
   },
   "dashboard": {
     "totalDue": "Total due",

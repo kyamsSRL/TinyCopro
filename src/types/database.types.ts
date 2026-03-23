@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
@@ -286,57 +284,6 @@ export type Database = {
           },
         ]
       }
-      invitations: {
-        Row: {
-          code: string
-          copropriete_id: string
-          created_at: string
-          created_by: string
-          expires_at: string
-          id: string
-          is_used: boolean
-          membre_id: string | null
-          used_by: string | null
-        }
-        Insert: {
-          code?: string
-          copropriete_id: string
-          created_at?: string
-          created_by: string
-          expires_at?: string
-          id?: string
-          is_used?: boolean
-          membre_id?: string | null
-          used_by?: string | null
-        }
-        Update: {
-          code?: string
-          copropriete_id?: string
-          created_at?: string
-          created_by?: string
-          expires_at?: string
-          id?: string
-          is_used?: boolean
-          membre_id?: string | null
-          used_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "invitations_copropriete_id_fkey"
-            columns: ["copropriete_id"]
-            isOneToOne: false
-            referencedRelation: "coproprietes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invitations_membre_id_fkey"
-            columns: ["membre_id"]
-            isOneToOne: false
-            referencedRelation: "membres"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       journal_audit: {
         Row: {
           action: string
@@ -385,7 +332,9 @@ export type Database = {
           created_at: string
           date_adhesion: string | null
           id: string
-          invitation_id: string | null
+          invitation_code: string | null
+          invitation_expires_at: string | null
+          invitation_used_by: string | null
           is_active: boolean
           milliemes: number
           role: Database["public"]["Enums"]["membre_role"]
@@ -398,7 +347,9 @@ export type Database = {
           created_at?: string
           date_adhesion?: string | null
           id?: string
-          invitation_id?: string | null
+          invitation_code?: string | null
+          invitation_expires_at?: string | null
+          invitation_used_by?: string | null
           is_active?: boolean
           milliemes?: number
           role?: Database["public"]["Enums"]["membre_role"]
@@ -411,7 +362,9 @@ export type Database = {
           created_at?: string
           date_adhesion?: string | null
           id?: string
-          invitation_id?: string | null
+          invitation_code?: string | null
+          invitation_expires_at?: string | null
+          invitation_used_by?: string | null
           is_active?: boolean
           milliemes?: number
           role?: Database["public"]["Enums"]["membre_role"]
@@ -424,13 +377,6 @@ export type Database = {
             columns: ["copropriete_id"]
             isOneToOne: false
             referencedRelation: "coproprietes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "membres_invitation_id_fkey"
-            columns: ["invitation_id"]
-            isOneToOne: false
-            referencedRelation: "invitations"
             referencedColumns: ["id"]
           },
           {
@@ -451,6 +397,7 @@ export type Database = {
           id: string
           methode: string
           montant_paye: number
+          preuve_paiement_url: string | null
           reference: string | null
         }
         Insert: {
@@ -461,6 +408,7 @@ export type Database = {
           id?: string
           methode?: string
           montant_paye: number
+          preuve_paiement_url?: string | null
           reference?: string | null
         }
         Update: {
@@ -471,6 +419,7 @@ export type Database = {
           id?: string
           methode?: string
           montant_paye?: number
+          preuve_paiement_url?: string | null
           reference?: string | null
         }
         Relationships: [

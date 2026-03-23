@@ -128,23 +128,22 @@ export function JoinCoproDialog({ onSuccess, children, defaultCode }: JoinCoproD
     setIsSubmitting(true);
 
     try {
-      // 1. Look up invitation by code (not expired, not used)
-      const { data: invitation, error: lookupError } = await supabase
-        .from('invitations')
-        .select('*, membres!invitations_membre_id_fkey(id, copropriete_id, date_adhesion)')
-        .eq('code', values.code)
-        .eq('is_used', false)
-        .gte('expires_at', new Date().toISOString())
+      // 1. Look up placeholder membre by invitation_code
+      const { data: placeholder, error: lookupError } = await supabase
+        .from('membres')
+        .select('id, copropriete_id, date_adhesion')
+        .eq('invitation_code', values.code)
+        .is('user_id', null)
+        .gte('invitation_expires_at', new Date().toISOString())
         .single();
 
-      if (lookupError || !invitation) {
+      if (lookupError || !placeholder) {
         setError(t('codeInvalide'));
         setIsSubmitting(false);
         return;
       }
 
-      const coproId = invitation.copropriete_id;
-      const placeholder = (invitation as any).membres;
+      const coproId = placeholder.copropriete_id;
 
       // Check if user is already an active member
       const { data: existingMembre } = await supabase
@@ -161,59 +160,38 @@ export function JoinCoproDialog({ onSuccess, children, defaultCode }: JoinCoproD
         return;
       }
 
-      if (placeholder && placeholder.id) {
-        // UPDATE the placeholder membre
-        const { error: updateError } = await supabase
-          .from('membres')
-          .update({
-            user_id: user.id,
-            milliemes: values.milliemes,
-            alias: null,
-          })
-          .eq('id', placeholder.id);
-
-        if (updateError) {
-          setError(updateError.message);
-          setIsSubmitting(false);
-          return;
-        }
-
-        // Recalculate repartitions retroactively
-        await recalculateRepartitions(
-          placeholder.id,
-          coproId,
-          placeholder.date_adhesion,
-          values.milliemes
-        );
-
-        logAudit({
-          coproprieteId: coproId,
-          action: 'recalcul_retroactif',
-          entityType: 'membre',
-          entityId: placeholder.id,
-          details: { milliemes: values.milliemes, date_adhesion: placeholder.date_adhesion },
-        });
-      } else {
-        // Fallback: INSERT new member if no placeholder (legacy code support)
-        const { error: membreError } = await supabase.from('membres').insert({
-          copropriete_id: coproId,
+      // UPDATE the placeholder membre
+      const { error: updateError } = await supabase
+        .from('membres')
+        .update({
           user_id: user.id,
-          role: 'coproprietaire',
           milliemes: values.milliemes,
-        });
+          alias: null,
+          invitation_used_by: user.id,
+        })
+        .eq('id', placeholder.id);
 
-        if (membreError) {
-          setError(membreError.message);
-          setIsSubmitting(false);
-          return;
-        }
+      if (updateError) {
+        setError(updateError.message);
+        setIsSubmitting(false);
+        return;
       }
 
-      // Mark invitation as used
-      await supabase
-        .from('invitations')
-        .update({ is_used: true, used_by: user.id })
-        .eq('id', invitation.id);
+      // Recalculate repartitions retroactively
+      await recalculateRepartitions(
+        placeholder.id,
+        coproId,
+        placeholder.date_adhesion,
+        values.milliemes
+      );
+
+      logAudit({
+        coproprieteId: coproId,
+        action: 'recalcul_retroactif',
+        entityType: 'membre',
+        entityId: placeholder.id,
+        details: { milliemes: values.milliemes, date_adhesion: placeholder.date_adhesion },
+      });
 
       logAudit({
         coproprieteId: coproId,
