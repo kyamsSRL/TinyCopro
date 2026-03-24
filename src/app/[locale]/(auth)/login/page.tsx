@@ -89,7 +89,7 @@ export default function LoginPage() {
         <CardDescription>
           {t('noAccount')}{' '}
           <Link
-            href={`/${locale}/register`}
+            href={`/${locale}/register${invitationCode ? `?ref=${invitationCode}` : ''}`}
             className="text-primary underline underline-offset-4 hover:text-primary/80"
           >
             {t('register')}
@@ -147,7 +147,7 @@ export default function LoginPage() {
         <p className="text-sm text-muted-foreground">
           {t('noAccount')}{' '}
           <Link
-            href={`/${locale}/register`}
+            href={`/${locale}/register${invitationCode ? `?ref=${invitationCode}` : ''}`}
             className="text-primary underline underline-offset-4 hover:text-primary/80"
           >
             {t('register')}

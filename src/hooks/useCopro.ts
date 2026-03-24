@@ -18,7 +18,7 @@ export function useCopros() {
   const fetchCopros = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     try {
-      const { data } = await listUserCopros(userId);
+      const { data } = await listUserCopros();
       if (data) setCopros(data);
     } finally {
       setLoading(false);

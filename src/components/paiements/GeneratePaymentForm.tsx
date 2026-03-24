@@ -46,7 +46,7 @@ export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
     if (!currentMembre) return;
     setLoading(true);
 
-    const { data } = await getRepartitionsEnCours(currentMembre.id);
+    const { data } = await getRepartitionsEnCours(copro!.id);
 
     if (data) setRepartitions(data as unknown as RepartitionWithDepense[]);
     setLoading(false);
@@ -92,7 +92,6 @@ export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
         coproId: copro.id,
         membreId: currentMembre.id,
         repartitionIds: selectedRepartitions.map(r => r.id),
-        createdBy: user.id,
       });
 
       if (paymentError || !paymentResult) {

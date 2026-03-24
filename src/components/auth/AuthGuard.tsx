@@ -11,7 +11,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && !user) {
       const locale = pathname.split('/')[1] || 'fr';
-      window.location.href = `/${locale}/login/`;
+      const search = typeof window !== 'undefined' ? window.location.search : '';
+      window.location.href = `/${locale}/login/${search}`;
     }
   }, [user, loading, pathname]);
 

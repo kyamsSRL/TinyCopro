@@ -93,3 +93,11 @@ export function createMarkPaidSchema(v: V) {
     reference: z.string().optional(),
   });
 }
+
+export function createDepositSchema(v: V) {
+  return z.object({
+    montant: z.string().min(1, v('amountRequired')),
+    reference: z.string().optional(),
+    date_depot: z.string().min(1, v('dateRequired')),
+  });
+}

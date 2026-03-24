@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
-import { Plus, Settings, FileText, Image as ImageIcon } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { Plus, Settings, FileText, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
+import { deleteDepense, listDepenses as listDepensesService, listCategories as listCategoriesService } from '@/services/depense';
 import { useCoproContext } from '@/components/copro/CoproContext';
 import { DepenseForm } from '@/components/depenses/DepenseForm';
 import { CategoryManager } from '@/components/depenses/CategoryManager';
@@ -40,6 +42,7 @@ type DepenseWithRelations = Depense & {
 export function DepensesPageContent() {
   const t = useTranslations('depenses');
   const tc = useTranslations('common');
+  const { user } = useAuth();
   const { copro, membres, isGestionnaire, exercice } = useCoproContext();
 
   const [depenses, setDepenses] = useState<DepenseWithRelations[]>([]);
@@ -48,36 +51,23 @@ export function DepensesPageContent() {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
   const [selectedDepense, setSelectedDepense] = useState<DepenseWithRelations | null>(null);
+  const [editingDepense, setEditingDepense] = useState<DepenseWithRelations | null>(null);
 
   const fetchDepenses = useCallback(async () => {
     if (!copro || !exercice) return;
     setLoading(true);
-
-    const { data } = await supabase
-      .from('depenses')
-      .select(`
-        *,
-        categories_depenses(*),
-        repartitions(*, membres(*, profiles(*)))
-      `)
-      .eq('copropriete_id', copro.id)
-      .eq('exercice_id', exercice.id)
-      .order('date_depense', { ascending: false });
-
+    const { data } = await listDepensesService(copro.id, exercice.id);
     if (data) setDepenses(data as unknown as DepenseWithRelations[]);
     setLoading(false);
   }, [copro, exercice]);
 
   const fetchCategories = useCallback(async () => {
     if (!copro) return;
-    const { data } = await supabase
-      .from('categories_depenses')
-      .select('*')
-      .or(`is_global.eq.true,copropriete_id.eq.${copro.id}`)
-      .order('nom');
-    if (data) setCategories(data);
+    const { data } = await listCategoriesService(copro.id);
+    if (data) setCategories(data as Category[]);
   }, [copro]);
 
   useEffect(() => {
@@ -124,9 +114,41 @@ export function DepensesPageContent() {
     fetchDepenses();
   };
 
-  // Shared detail content for both sheet and expanded row
-  const renderDepenseDetail = (dep: DepenseWithRelations) => (
+  const handleDelete = async (dep: DepenseWithRelations) => {
+    if (!user) return;
+    const { error } = await deleteDepense(dep.id);
+    if (error) { toast.error(error.message); return; }
+    setSelectedDepense(null);
+    fetchDepenses();
+  };
+
+  const renderDepenseDetail = (dep: DepenseWithRelations) => {
+    const canEdit = isGestionnaire || dep.created_by === user?.id;
+    const canOverride = isGestionnaire;
+
+    return (
     <div className="space-y-4">
+      {canEdit && (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { setEditingDepense(dep); setEditOpen(true); }}
+          >
+            <Pencil className="h-4 w-4 mr-1" />
+            {tc('edit')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive"
+            onClick={() => handleDelete(dep)}
+          >
+            <Trash2 className="h-4 w-4 mr-1" />
+            {tc('delete')}
+          </Button>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2 text-sm">
         <Badge variant="outline">{dep.date_depense}</Badge>
         {dep.categories_depenses && <Badge variant="outline">{dep.categories_depenses.nom}</Badge>}
@@ -178,7 +200,7 @@ export function DepensesPageContent() {
                   {getStatusBadge(rep.statut)}
                 </div>
                 <div className="text-sm font-medium shrink-0 ml-2">
-                  {isGestionnaire ? (
+                  {canOverride ? (
                     <OverrideDialog
                       repartition={rep}
                       memberName={name}
@@ -218,6 +240,7 @@ export function DepensesPageContent() {
       )}
     </div>
   );
+  };
 
   if (loading) {
     return (
@@ -233,36 +256,45 @@ export function DepensesPageContent() {
         <h1 className="text-2xl font-bold">{t('title')}</h1>
         <div className="flex items-center gap-2">
           {isGestionnaire && (
-            <>
-              <Dialog open={catOpen} onOpenChange={setCatOpen}>
-                <DialogTrigger
-                  render={
-                    <Button variant="outline">
-                      <Settings className="mr-1.5" />
-                      {t('categories')}
-                    </Button>
-                  }
-                />
-                <DialogContent className="sm:max-w-md">
-                  <CategoryManager />
-                </DialogContent>
-              </Dialog>
-
-              <Dialog open={addOpen} onOpenChange={setAddOpen}>
-                <DialogTrigger
-                  render={
-                    <Button>
-                      <Plus className="mr-1.5" />
-                      {t('add')}
-                    </Button>
-                  }
-                />
-                <DialogContent className="sm:max-w-lg">
-                  <DepenseForm onSuccess={handleAddSuccess} />
-                </DialogContent>
-              </Dialog>
-            </>
+            <Dialog open={catOpen} onOpenChange={setCatOpen}>
+              <DialogTrigger
+                render={
+                  <Button variant="outline">
+                    <Settings className="mr-1.5" />
+                    {t('categories')}
+                  </Button>
+                }
+              />
+              <DialogContent className="sm:max-w-md">
+                <CategoryManager />
+              </DialogContent>
+            </Dialog>
           )}
+
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+            <DialogTrigger
+              render={
+                <Button>
+                  <Plus className="mr-1.5" />
+                  {t('add')}
+                </Button>
+              }
+            />
+            <DialogContent className="sm:max-w-lg">
+              <DepenseForm onSuccess={handleAddSuccess} />
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); if (!open) setEditingDepense(null); }}>
+            <DialogContent className="sm:max-w-lg">
+              {editingDepense && (
+                <DepenseForm
+                  depense={editingDepense}
+                  onSuccess={() => { setEditOpen(false); setEditingDepense(null); setSelectedDepense(null); fetchDepenses(); }}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 

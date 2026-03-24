@@ -2,8 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
-import { FileDown, Plus, CheckCircle, Paperclip, ExternalLink } from 'lucide-react';
+import { FileDown, Plus, CheckCircle, Paperclip, ExternalLink, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { createDepositSchema } from '@/lib/validation';
 import { useCoproContext } from '@/components/copro/CoproContext';
 import { GeneratePaymentForm } from '@/components/paiements/GeneratePaymentForm';
 import { MarkAsPaidDialog } from '@/components/paiements/MarkAsPaidDialog';
@@ -19,7 +23,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { uploadProof, listAppels } from '@/services/paiement';
+import { uploadProof, listAppels, createDeposit } from '@/services/paiement';
+import { useAuth } from '@/hooks/useAuth';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import type { Tables, Enums } from '@/types/database.types';
 
 type AppelPaiement = Tables<'appels_paiement'>;
@@ -45,9 +52,42 @@ export function PaiementsPageContent() {
   const [allAppels, setAllAppels] = useState<AppelWithMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [depositOpen, setDepositOpen] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
   const [selectedAppel, setSelectedAppel] = useState<AppelWithMember | null>(null);
+  const [isDepositing, setIsDepositing] = useState(false);
+
+  const tv = useTranslations('validation');
+  const depositSchema = createDepositSchema(tv);
+  type DepositFormValues = z.infer<typeof depositSchema>;
+
+  const depositForm = useForm<DepositFormValues>({
+    resolver: zodResolver(depositSchema),
+    defaultValues: { montant: '', reference: '', date_depot: new Date().toISOString().split('T')[0] },
+  });
+
+  // Auto-open generate dialog if ?generate=true
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('generate') === 'true') setGenerateOpen(true);
+    }
+  }, []);
+
+  const handleDeposit = async (values: DepositFormValues) => {
+    if (!copro) return;
+    const montant = parseFloat(values.montant);
+    if (isNaN(montant) || montant <= 0) return;
+    setIsDepositing(true);
+    const { error } = await createDeposit({ coproId: copro.id, montant, reference: values.reference, date: values.date_depot });
+    setIsDepositing(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(t('depositSuccess'));
+    setDepositOpen(false);
+    depositForm.reset();
+    fetchAppels();
+  };
 
   const handleUploadProof = async (paiementId: string, file: File) => {
     if (!copro) return;
@@ -231,6 +271,45 @@ export function PaiementsPageContent() {
           />
           <DialogContent className="sm:max-w-lg">
             <GeneratePaymentForm onSuccess={handleGenerateSuccess} />
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={depositOpen} onOpenChange={setDepositOpen}>
+          <DialogTrigger
+            render={
+              <Button variant="outline">
+                <Wallet className="mr-1.5" />
+                {t('deposit')}
+              </Button>
+            }
+          />
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t('deposit')}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={depositForm.handleSubmit(handleDeposit)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="deposit-montant">{t('depositAmount')} *</Label>
+                <Input id="deposit-montant" type="number" step="0.01" min="0.01" {...depositForm.register('montant')} />
+                {depositForm.formState.errors.montant && (
+                  <p className="text-sm text-destructive">{depositForm.formState.errors.montant.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="deposit-ref">{t('paymentReference')}</Label>
+                <Input id="deposit-ref" {...depositForm.register('reference')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="deposit-date">{t('depositDate')} *</Label>
+                <Input id="deposit-date" type="date" {...depositForm.register('date_depot')} />
+                {depositForm.formState.errors.date_depot && (
+                  <p className="text-sm text-destructive">{depositForm.formState.errors.date_depot.message}</p>
+                )}
+              </div>
+              <Button type="submit" disabled={isDepositing} className="w-full">
+                {isDepositing ? '...' : t('deposit')}
+              </Button>
+            </form>
           </DialogContent>
         </Dialog>
       </div>

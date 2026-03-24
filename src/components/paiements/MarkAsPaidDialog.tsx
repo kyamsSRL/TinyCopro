@@ -86,7 +86,6 @@ export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess,
         datePaiement: values.date_paiement,
         reference: values.reference || undefined,
         preuvePaiementUrl: preuveUrl || undefined,
-        confirmedBy: user.id,
       });
 
       if (rpcError) {

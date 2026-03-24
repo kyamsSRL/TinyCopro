@@ -74,7 +74,6 @@ export function JoinCoproDialog({ onSuccess, children, defaultCode }: JoinCoproD
       // Claim via RPC (atomic: validates code, checks membership, updates membre, recalculates repartitions)
       const { coproId, error: claimError } = await claimInvitation({
         invitationCode: values.code,
-        userId: user.id,
         milliemes: values.milliemes,
       });
 
@@ -94,7 +93,7 @@ export function JoinCoproDialog({ onSuccess, children, defaultCode }: JoinCoproD
           entityId: coproId,
         });
 
-        const { emails } = await getMemberEmails(coproId, user.id);
+        const { emails } = await getMemberEmails(coproId);
         if (emails.length > 0) {
           sendNotification({
             type: 'nouveau_membre',

@@ -7,7 +7,6 @@ export async function createCopropriete(params: {
   iban: string;
   bic?: string;
   milliemes: number;
-  userId: string;
 }) {
   const { data, error } = await supabase.rpc('create_copro_with_member', {
     p_nom: params.nom,
@@ -16,17 +15,31 @@ export async function createCopropriete(params: {
     p_iban: params.iban,
     p_bic: params.bic ?? null,
     p_milliemes: params.milliemes,
-    p_user_id: params.userId,
   });
   return { coproId: data as string | null, error };
 }
 
-export async function listUserCopros(userId: string) {
-  const { data, error } = await supabase.rpc('get_user_copros', { p_user_id: userId });
+export async function listUserCopros() {
+  const { data, error } = await supabase.rpc('get_user_copros');
   return { data: data as any[] | null, error };
 }
 
 export async function getCoproDetail(coproId: string) {
   const { data, error } = await supabase.rpc('get_copro_detail', { p_copro_id: coproId });
   return { data: data as { copro: any; membres: any[]; exercice: any } | null, error };
+}
+
+export async function getDashboardStats(coproId: string) {
+  const { data, error } = await supabase.rpc('get_dashboard_stats', { p_copro_id: coproId });
+  return { data: data as {
+    my_total_due: number;
+    my_pending: number;
+    my_paid: number;
+    copro_total_expenses: number;
+    copro_collected: number;
+    copro_outstanding: number;
+    copro_iban: string;
+    member_soldes: { membre_id: string; nom: string; prenom: string; alias: string | null; du: number; depot: number }[];
+    category_breakdown: { categorie: string; total: number }[];
+  } | null, error };
 }

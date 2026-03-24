@@ -107,7 +107,6 @@ export function CreateInvitationDialog({ onSuccess, children }: CreateInvitation
         alias: values.alias,
         email: values.email || undefined,
         dateAdhesion: values.date_adhesion,
-        createdBy: user.id,
       });
 
       if (rpcError || !invitationCode) {
@@ -125,7 +124,7 @@ export function CreateInvitationDialog({ onSuccess, children }: CreateInvitation
       });
 
       const locale = window.location.pathname.split('/')[1] || 'fr';
-      const link = `${window.location.origin}/${locale}/register?ref=${invitationCode}`;
+      const link = `${window.location.origin}/${locale}/copros/?ref=${invitationCode}`;
       setCreatedLink(link);
       setCreatedEmail(values.email || null);
       reset();

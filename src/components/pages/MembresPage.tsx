@@ -275,11 +275,32 @@ export function MembresPageContent() {
                       {selectedMembre.date_adhesion && <Badge variant="outline">{selectedMembre.date_adhesion}</Badge>}
                     </div>
 
-                    {isGestionnaire && placeholder && membreAny.invitation_code && (
-                      <div className="space-y-1">
+                    {placeholder && membreAny.invitation_code && (
+                      <div className="space-y-2">
                         <p className="text-xs font-medium text-muted-foreground">{t('invitationCode')}</p>
+                        <div className="bg-muted p-2 rounded-lg">
+                          <p className="text-xs font-mono break-all select-all">
+                            {typeof window !== 'undefined'
+                              ? `${window.location.origin}/${(window.location.pathname.split('/')[1] || 'fr')}/copros/?ref=${membreAny.invitation_code}`
+                              : membreAny.invitation_code
+                            }
+                          </p>
+                        </div>
                         <div className="flex items-center gap-2">
-                          <code className="font-mono tracking-wider text-sm bg-muted px-2 py-1 rounded">{membreAny.invitation_code}</code>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const locale = window.location.pathname.split('/')[1] || 'fr';
+                              const link = `${window.location.origin}/${locale}/copros/?ref=${membreAny.invitation_code}`;
+                              navigator.clipboard.writeText(link).catch(() => {});
+                              setCopiedId(selectedMembre.id);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                          >
+                            {copiedId === selectedMembre.id ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+                            {t('copyLink')}
+                          </Button>
                           <span className="text-xs text-muted-foreground">
                             exp. {new Date(membreAny.invitation_expires_at).toLocaleDateString()}
                           </span>

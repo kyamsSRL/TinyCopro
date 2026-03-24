@@ -12,7 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { logAudit } from '@/lib/audit';
 import { sendNotification } from '@/lib/notifications';
 import { useCoproContext } from '@/components/copro/CoproContext';
-import { createDepense, listCategories } from '@/services/depense';
+import { createDepense, updateDepense, listCategories } from '@/services/depense';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,9 +35,10 @@ type Category = Tables<'categories_depenses'>;
 
 interface DepenseFormProps {
   onSuccess?: () => void;
+  depense?: Tables<'depenses'>;
 }
 
-export function DepenseForm({ onSuccess }: DepenseFormProps) {
+export function DepenseForm({ onSuccess, depense }: DepenseFormProps) {
   const t = useTranslations('depenses');
   const tc = useTranslations('common');
   const tv = useTranslations('validation');
@@ -48,8 +49,8 @@ export function DepenseForm({ onSuccess }: DepenseFormProps) {
   const { copro, membres, exercice } = useCoproContext();
 
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  const [selectedFrequence, setSelectedFrequence] = useState<string>('unique');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(depense?.categorie_id || '');
+  const [selectedFrequence, setSelectedFrequence] = useState<string>(depense?.frequence || 'unique');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
@@ -59,7 +60,10 @@ export function DepenseForm({ onSuccess }: DepenseFormProps) {
   } = useForm<DepenseFormValues>({
     resolver: zodResolver(depenseSchema),
     defaultValues: {
-      date_depense: new Date().toISOString().split('T')[0],
+      libelle: depense?.libelle || '',
+      montant_total: depense ? String(depense.montant_total) : '',
+      date_depense: depense?.date_depense || new Date().toISOString().split('T')[0],
+      description: depense?.description || '',
     },
   });
 
@@ -84,26 +88,40 @@ export function DepenseForm({ onSuccess }: DepenseFormProps) {
 
     setIsSubmitting(true);
     try {
-      const { depenseId, error: rpcError } = await createDepense({
-        coproId: copro.id,
-        exerciceId: exercice.id,
-        libelle: values.libelle,
-        montantTotal: montant,
-        dateDepense: values.date_depense,
-        description: values.description || undefined,
-        categorieId: selectedCategoryId || undefined,
-        frequence: selectedFrequence,
-        createdBy: user.id,
-      });
+      let depenseId: string | null;
 
-      if (rpcError || !depenseId) {
-        toast.error(rpcError?.message || tc('error'));
-        return;
+      if (depense) {
+        // Edit mode
+        const { error: rpcError } = await updateDepense({
+          depenseId: depense.id,
+          libelle: values.libelle,
+          montantTotal: montant,
+          dateDepense: values.date_depense,
+          description: values.description || undefined,
+          categorieId: selectedCategoryId || undefined,
+          frequence: selectedFrequence,
+        });
+        if (rpcError) { toast.error(rpcError.message || tc('error')); return; }
+        depenseId = depense.id;
+      } else {
+        // Create mode
+        const { depenseId: newId, error: rpcError } = await createDepense({
+          coproId: copro.id,
+          exerciceId: exercice.id,
+          libelle: values.libelle,
+          montantTotal: montant,
+          dateDepense: values.date_depense,
+          description: values.description || undefined,
+          categorieId: selectedCategoryId || undefined,
+          frequence: selectedFrequence,
+        });
+        if (rpcError || !newId) { toast.error(rpcError?.message || tc('error')); return; }
+        depenseId = newId;
       }
 
       logAudit({
         coproprieteId: copro.id,
-        action: 'create',
+        action: depense ? 'update' : 'create',
         entityType: 'depense',
         entityId: depenseId,
         details: { libelle: values.libelle, montant: montant },
@@ -195,7 +213,10 @@ export function DepenseForm({ onSuccess }: DepenseFormProps) {
               onValueChange={(v) => setSelectedCategoryId(v ?? '')}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={t('category')} />
+                {selectedCategoryId
+                  ? <span data-slot="select-value" className="flex flex-1 text-left">{categories.find(c => c.id === selectedCategoryId)?.nom}</span>
+                  : <SelectValue placeholder={t('category')} />
+                }
               </SelectTrigger>
               <SelectContent>
                 {categories.map(cat => (

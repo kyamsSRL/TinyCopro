@@ -71,7 +71,6 @@ export function CreateCoproForm({ onSuccess }: CreateCoproFormProps) {
         iban: values.iban,
         bic: values.bic || undefined,
         milliemes: values.milliemes,
-        userId: user.id,
       });
 
       if (rpcError || !coproId) {

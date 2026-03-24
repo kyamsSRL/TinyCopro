@@ -111,7 +111,7 @@ export default function RegisterPage() {
           </Alert>
           <div className="mt-4 text-center">
             <Link
-              href={`/${locale}/login`}
+              href={`/${locale}/login${invitationCode ? `?ref=${invitationCode}` : ''}`}
               className="text-primary underline underline-offset-4 hover:text-primary/80"
             >
               {t('login')}
@@ -129,7 +129,7 @@ export default function RegisterPage() {
         <CardDescription>
           {t('hasAccount')}{' '}
           <Link
-            href={`/${locale}/login`}
+            href={`/${locale}/login${invitationCode ? `?ref=${invitationCode}` : ''}`}
             className="text-primary underline underline-offset-4 hover:text-primary/80"
           >
             {t('login')}
@@ -268,7 +268,7 @@ export default function RegisterPage() {
         <p className="text-sm text-muted-foreground">
           {t('hasAccount')}{' '}
           <Link
-            href={`/${locale}/login`}
+            href={`/${locale}/login${invitationCode ? `?ref=${invitationCode}` : ''}`}
             className="text-primary underline underline-offset-4 hover:text-primary/80"
           >
             {t('login')}

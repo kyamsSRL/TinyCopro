@@ -103,15 +103,38 @@
 ## Epic 3 : Gestion des dépenses
 
 ### US-3.1 : Ajouter une dépense
-**En tant que** gestionnaire,
+**En tant que** membre (gestionnaire ou copropriétaire),
 **je veux** ajouter une dépense à la copropriété,
 **afin que** chaque copropriétaire voie sa quote-part.
 
 **Critères d'acceptation :**
 - Champs : libellé, montant total, date, catégorie, description (optionnel)
-- La répartition se fait automatiquement selon les millièmes
+- La répartition se fait automatiquement selon les millièmes (base 1000)
 - La dépense est flaggée "en cours" par défaut
 - Notification aux copropriétaires qu'une nouvelle dépense a été ajoutée
+- **Tout membre** peut ajouter une dépense (pas seulement le gestionnaire)
+
+### US-3.7 : Modifier une dépense
+**En tant que** membre,
+**je veux** modifier une dépense que j'ai créée,
+**afin de** corriger une erreur ou mettre à jour les informations.
+
+**Critères d'acceptation :**
+- Un copropriétaire peut modifier uniquement les dépenses qu'il a créées (`created_by`)
+- Un gestionnaire peut modifier toutes les dépenses
+- Champs modifiables : libellé, montant total, date, catégorie, description, récurrence
+- Si le montant change, les répartitions non payées et non overridées sont recalculées (base 1000)
+
+### US-3.8 : Supprimer une dépense
+**En tant que** membre,
+**je veux** supprimer une dépense que j'ai créée,
+**afin de** corriger une erreur.
+
+**Critères d'acceptation :**
+- Un copropriétaire peut supprimer uniquement les dépenses qu'il a créées
+- Un gestionnaire peut supprimer toutes les dépenses
+- La suppression supprime également toutes les répartitions associées
+- Confirmation demandée avant suppression
 
 ### US-3.2 : Catégoriser les dépenses
 **En tant que** gestionnaire,
@@ -220,29 +243,21 @@
 
 ## Epic 5 : Dashboards
 
-### US-5.1 : Dashboard copropriétaire
-**En tant que** copropriétaire,
-**je veux** voir un résumé de ma situation financière,
-**afin de** savoir où j'en suis.
+### US-5.1 : Dashboard unifié (V1.2 — remplace US-5.1 et US-5.2)
+**En tant que** membre (gestionnaire ou copropriétaire),
+**je veux** voir un dashboard identique quel que soit mon rôle,
+**afin de** comprendre ma situation financière et celle de la copropriété.
 
 **Critères d'acceptation :**
-- Total dû (dépenses en cours)
-- Total en cours de paiement
-- Total payé
-- Liste des prochaines échéances
-- Accès rapide à la génération de paiement
+- Section "Mon état financier" : 3 cards (Total dû, En cours de paiement, Total payé) — propres au membre connecté, sans déduction des dépôts
+- Bouton "Payer" dans la carte "Total dû" → navigue vers Paiements avec dialog ouvert
+- Section "Ma copropriété" : IBAN visible, dépenses totales, encaissé, restant dû
+- Carte "Soldes membres" : 2 colonnes par membre (Dû ≤ 0, Dépôt ≥ 0)
+- Répartition par catégorie
+- Pas de boutons raccourcis en bas (la sidebar suffit)
+- Pas de différence entre gestionnaire et copropriétaire
 
-### US-5.2 : Dashboard gestionnaire
-**En tant que** gestionnaire,
-**je veux** voir une vue globale de la situation financière de la copro,
-**afin de** suivre les encaissements et les retards.
-
-**Critères d'acceptation :**
-- Total des dépenses de l'exercice
-- Total encaissé vs total dû
-- Liste des copropriétaires en retard de paiement
-- Répartition par catégorie de dépense
-- Accès rapide à la création de dépense et aux invitations de paiement
+### ~~US-5.2 : Dashboard gestionnaire~~ REMPLACÉ par US-5.1 (V1.2)
 
 ---
 
@@ -357,17 +372,22 @@
 - Gestionnaire peut override via `OverrideDialog` sur la répartition d'un alias
 - Le nom affiché est l'alias (pas "-- --")
 
-### US-INV-5 : Inscription via lien d'invitation
+### US-INV-5 : Invitation via lien ?ref=
 
 **En tant que** futur copropriétaire,
-**je veux** recevoir un lien qui pré-remplit le code sur la page d'inscription,
-**afin de** simplifier mon onboarding.
+**je veux** recevoir un lien d'invitation,
+**afin de** rejoindre la copropriété facilement.
 
 **Critères d'acceptation :**
-- Format du lien : `/{locale}/register?code={code}`
-- Page d'inscription affichée avec code pré-rempli (visible, non modifiable)
-- Si déjà inscrit : `/{locale}/login?code={code}` -> après login, JoinCoproDialog s'ouvre avec code pré-rempli
-- Saisie manuelle du code via JoinCoproDialog toujours possible
+- Format du lien : `/{locale}/copros/?ref={code}`
+- 3 scénarios supportés :
+  - **Déjà connecté** : arrive sur `/copros/?ref=CODE`, le JoinCoproDialog s'ouvre automatiquement avec le code pré-rempli
+  - **Pas connecté, a un compte** : AuthGuard redirige vers `/login/?ref=CODE`, après login → `/copros/?ref=CODE` → dialog join
+  - **Pas connecté, pas de compte** : AuthGuard → `/login/?ref=CODE` → clic "Inscription" → `/register/?ref=CODE` → inscription → `/copros/?ref=CODE` → dialog join
+- Le `?ref=` est préservé dans tous les liens entre login et register (aller-retour)
+- Lors de la création de l'invitation, un champ email (optionnel) permet d'envoyer le lien par email
+- Après création : popup avec le lien complet + boutons "Copier le lien" et "Envoyer par email" (si email renseigné)
+- Le lien d'invitation est visible dans le détail d'un membre en attente (clic sur la card)
 
 ### US-INV-6 : Adhésion avec remplacement de l'alias
 
@@ -409,8 +429,8 @@
 
 | Rôle (par copro) | Droits |
 |---|---|
-| **Gestionnaire** | Ajouter dépenses, override montants, valider paiements, gérer membres, transférer la gestion, clôturer exercices, voir audit log, générer invitations pour les membres. Peut avoir 0 millième (gestionnaire pur). |
-| **Copropriétaire** | Voir dépenses et sa quote-part, générer ses invitations de paiement, voir son historique, voir son dashboard |
+| **Gestionnaire** | Ajouter/modifier/supprimer toutes les dépenses, override montants, valider paiements, gérer membres, transférer la gestion, clôturer exercices, voir audit log, générer invitations pour les membres. Peut avoir 0 millième (gestionnaire pur). |
+| **Copropriétaire** | Ajouter des dépenses, modifier/supprimer ses propres dépenses, voir toutes les dépenses et sa quote-part, générer ses invitations de paiement, voir son historique, voir son dashboard |
 
 ## Statuts d'une dépense (pour un copropriétaire)
 

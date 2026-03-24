@@ -9,7 +9,6 @@ export async function createDepense(params: {
   description?: string;
   categorieId?: string;
   frequence: string;
-  createdBy: string;
   justificatifUrls?: string[];
 }) {
   const { data, error } = await supabase.rpc('create_depense_with_repartitions', {
@@ -21,17 +20,39 @@ export async function createDepense(params: {
     p_description: params.description ?? null,
     p_categorie_id: params.categorieId ?? null,
     p_frequence: params.frequence,
-    p_created_by: params.createdBy,
     p_justificatif_urls: params.justificatifUrls ?? null,
   });
   return { depenseId: data as string | null, error };
 }
 
-export async function listDepenses(coproId: string, exerciceId: string) {
-  const { data, error } = await supabase.rpc('get_depenses', {
-    p_copro_id: coproId,
-    p_exercice_id: exerciceId,
+export async function updateDepense(params: {
+  depenseId: string;
+  libelle: string;
+  montantTotal: number;
+  dateDepense: string;
+  description?: string;
+  categorieId?: string;
+  frequence: string;
+}) {
+  const { data, error } = await supabase.rpc('update_depense', {
+    p_depense_id: params.depenseId,
+    p_libelle: params.libelle,
+    p_montant_total: params.montantTotal,
+    p_date_depense: params.dateDepense,
+    p_description: params.description ?? null,
+    p_categorie_id: params.categorieId ?? null,
+    p_frequence: params.frequence,
   });
+  return { depenseId: data as string | null, error };
+}
+
+export async function deleteDepense(depenseId: string) {
+  const { error } = await supabase.rpc('delete_depense', { p_depense_id: depenseId });
+  return { error };
+}
+
+export async function listDepenses(coproId: string, exerciceId: string) {
+  const { data, error } = await supabase.rpc('get_depenses', { p_copro_id: coproId, p_exercice_id: exerciceId });
   return { data: data as any[] | null, error };
 }
 
@@ -50,15 +71,7 @@ export async function deleteCategory(categoryId: string) {
   return { error };
 }
 
-export async function overrideRepartition(params: {
-  repartitionId: string;
-  montantOverride: number;
-  motifOverride?: string;
-}) {
-  const { error } = await supabase.rpc('override_repartition', {
-    p_repartition_id: params.repartitionId,
-    p_montant: params.montantOverride,
-    p_motif: params.motifOverride ?? null,
-  });
+export async function overrideRepartition(params: { repartitionId: string; montantOverride: number; motifOverride?: string }) {
+  const { error } = await supabase.rpc('override_repartition', { p_repartition_id: params.repartitionId, p_montant: params.montantOverride, p_motif: params.motifOverride ?? null });
   return { error };
 }

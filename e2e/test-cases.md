@@ -100,17 +100,32 @@
   - Actions : Expander depense → cliquer montant alias (0 EUR) → override 50 EUR
   - **Attendu** : `montant_override = 50`, `montant_du` reste 0. Montant effectif affiche = 50 EUR.
 
-### US-INV-5 : Inscription via lien d'invitation
+### US-INV-5 : Invitation via lien ?ref=
 
-- [ ] **TC-INV-5.1** : Lien d'inscription avec code pre-rempli
-  - Pre-conditions : Invitation existante avec code connu
-  - Actions : Ouvrir `/{locale}/register?code=abc123def456`
-  - **Attendu** : Page inscription affichee avec champ code pre-rempli et en lecture seule.
+- [ ] **TC-INV-5.1** : Lien d'invitation — utilisateur deja connecte
+  - Pre-conditions : Utilisateur connecte, invitation existante avec code connu
+  - Actions : Ouvrir `/{locale}/copros/?ref=CODE`
+  - **Attendu** : JoinCoproDialog s'ouvre avec code pre-rempli. Saisir milliemes → rejoint la copro.
 
-- [ ] **TC-INV-5.2** : Lien de login avec code pre-rempli
-  - Pre-conditions : Utilisateur deja inscrit, invitation existante
-  - Actions : Ouvrir `/{locale}/login?code=abc123def456` → se connecter
-  - **Attendu** : Apres login, JoinCoproDialog s'ouvre avec code pre-rempli.
+- [ ] **TC-INV-5.2** : Lien d'invitation — utilisateur pas connecte, a un compte
+  - Pre-conditions : Utilisateur inscrit mais pas connecte, invitation existante
+  - Actions : Ouvrir `/{locale}/copros/?ref=CODE`
+  - **Attendu** : Redirige vers `/login/?ref=CODE`. Apres login → `/copros/?ref=CODE` → JoinCoproDialog s'ouvre.
+
+- [ ] **TC-INV-5.3** : Lien d'invitation — utilisateur pas inscrit
+  - Pre-conditions : Pas de compte, invitation existante
+  - Actions : Ouvrir `/{locale}/copros/?ref=CODE` → redirige vers login → clic "Inscription"
+  - **Attendu** : URL register contient `?ref=CODE`. Apres inscription → `/copros/?ref=CODE` → JoinCoproDialog s'ouvre.
+
+- [ ] **TC-INV-5.4** : Preservation du ?ref= entre login et register
+  - Pre-conditions : Invitation existante
+  - Actions : Ouvrir `/login/?ref=CODE` → clic "Inscription" → verifier URL → clic "Connexion" → verifier URL
+  - **Attendu** : `?ref=CODE` present dans l'URL a chaque etape (aller-retour login ↔ register).
+
+- [ ] **TC-INV-5.5** : Lien d'invitation visible dans le detail d'un membre en attente
+  - Pre-conditions : Gestionnaire connecte, invitation creee
+  - Actions : Page Membres → clic sur la card du membre en attente
+  - **Attendu** : Dialog affiche le lien complet avec bouton "Copier le lien".
 
 ### US-INV-6 : Adhesion avec remplacement de l'alias
 
@@ -175,6 +190,39 @@
 ### US-3.5 : Override montant
 - [x] TC-3.5.1 : Override montant Martin a 250 EUR
 
+### US-3.7 : Modifier une depense
+- [ ] **TC-3.7.1** : Coproprietaire modifie sa propre depense
+  - Pre-conditions : Coproprietaire connecte, a cree une depense
+  - Actions : Clic sur la depense → bouton "Modifier" visible → modifier le montant → sauvegarder
+  - **Attendu** : Montant mis a jour, repartitions recalculees.
+
+- [ ] **TC-3.7.2** : Coproprietaire ne peut pas modifier la depense d'un autre
+  - Pre-conditions : Coproprietaire connecte, depense creee par le gestionnaire
+  - Actions : Clic sur la depense
+  - **Attendu** : Pas de bouton "Modifier" ni "Supprimer".
+
+- [ ] **TC-3.7.3** : Gestionnaire modifie n'importe quelle depense
+  - Pre-conditions : Gestionnaire connecte, depense creee par un coproprietaire
+  - Actions : Clic sur la depense → bouton "Modifier" → modifier → sauvegarder
+  - **Attendu** : Modification acceptee.
+
+### US-3.8 : Supprimer une depense
+- [ ] **TC-3.8.1** : Coproprietaire supprime sa propre depense
+  - Pre-conditions : Coproprietaire connecte, a cree une depense
+  - Actions : Clic sur la depense → bouton "Supprimer" → confirmer
+  - **Attendu** : Depense + repartitions supprimees.
+
+- [ ] **TC-3.8.2** : Gestionnaire supprime n'importe quelle depense
+  - Pre-conditions : Gestionnaire connecte
+  - Actions : Clic sur une depense → "Supprimer" → confirmer
+  - **Attendu** : Suppression acceptee.
+
+### US-3.1 (V1.2) : Coproprietaire peut ajouter une depense
+- [ ] **TC-3.1.4** : Coproprietaire ajoute une depense
+  - Pre-conditions : Coproprietaire connecte
+  - Actions : Clic sur "Ajouter une depense" → remplir formulaire → sauvegarder
+  - **Attendu** : Depense creee, repartitions calculees, bouton "Ajouter" visible.
+
 ### US-3.6 : Filtres
 - [x] TC-3.6.1 : Filtrer depenses par statut
 
@@ -196,10 +244,10 @@
 ## Epic 5 : Dashboards
 
 ### US-5.1 : Dashboard coproprietaire
-- [x] TC-5.1.1 : Dashboard coproprietaire (stats visibles)
+- [ ] TC-5.1.1 : Dashboard coproprietaire (stats visibles)
 
 ### US-5.2 : Dashboard gestionnaire
-- [x] TC-5.2.1 : Dashboard gestionnaire (stats visibles)
+- [ ] TC-5.2.1 : Dashboard gestionnaire (stats visibles)
 
 ---
 
