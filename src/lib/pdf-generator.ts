@@ -14,343 +14,187 @@ import QRCode from 'qrcode';
 import { generateEpcQrData } from './qr-generator';
 
 const styles = StyleSheet.create({
-  page: {
-    padding: 40,
-    fontSize: 10,
-    fontFamily: 'Helvetica',
-  },
-  header: {
-    marginBottom: 30,
-    borderBottomWidth: 2,
-    borderBottomColor: '#333',
-    paddingBottom: 15,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Helvetica-Bold',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 10,
-    color: '#666',
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontFamily: 'Helvetica-Bold',
-    marginBottom: 8,
-    color: '#333',
-  },
-  memberInfo: {
-    marginBottom: 15,
-    padding: 10,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 4,
-  },
-  memberName: {
-    fontSize: 12,
-    fontFamily: 'Helvetica-Bold',
-    marginBottom: 4,
-  },
-  table: {
-    marginBottom: 15,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-    paddingBottom: 4,
-    marginBottom: 4,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: 3,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#ddd',
-  },
-  colLabel: {
-    flex: 3,
-  },
-  colDate: {
-    flex: 2,
-  },
-  colAmount: {
-    flex: 1,
-    textAlign: 'right',
-  },
-  headerCell: {
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 9,
-    color: '#666',
-    textTransform: 'uppercase',
-  },
-  totalRow: {
-    flexDirection: 'row',
-    borderTopWidth: 2,
-    borderTopColor: '#333',
-    paddingTop: 6,
-    marginTop: 4,
-  },
-  totalLabel: {
-    flex: 5,
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 12,
-  },
-  totalAmount: {
-    flex: 1,
-    textAlign: 'right',
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 12,
-  },
-  bankInfo: {
-    marginTop: 15,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 4,
-  },
-  bankRow: {
-    flexDirection: 'row',
-    marginBottom: 3,
-  },
-  bankLabel: {
-    width: 100,
-    fontFamily: 'Helvetica-Bold',
-    color: '#666',
-  },
-  bankValue: {
-    flex: 1,
-  },
-  qrSection: {
-    alignItems: 'center',
-    marginTop: 20,
-    padding: 15,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 4,
-  },
-  qrImage: {
-    width: 150,
-    height: 150,
-  },
-  qrCaption: {
-    marginTop: 8,
-    fontSize: 8,
-    color: '#999',
-    textAlign: 'center',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 40,
-    right: 40,
-    fontSize: 8,
-    color: '#999',
-    textAlign: 'center',
-    borderTopWidth: 0.5,
-    borderTopColor: '#ddd',
-    paddingTop: 8,
-  },
+  page: { padding: 40, fontSize: 10, fontFamily: 'Helvetica' },
+  title: { fontSize: 18, fontFamily: 'Helvetica-Bold', marginBottom: 20, textAlign: 'center' },
+  destinataire: { marginBottom: 20, alignItems: 'flex-end' },
+  destinataireLabel: { fontSize: 9, color: '#666', marginBottom: 2 },
+  destinataireName: { fontSize: 12, fontFamily: 'Helvetica-Bold' },
+  coproBlock: { marginBottom: 15, borderTopWidth: 1, borderTopColor: '#ccc', paddingTop: 10 },
+  coproName: { fontSize: 14, fontFamily: 'Helvetica-Bold', marginBottom: 2 },
+  syndicBlock: { marginBottom: 15 },
+  syndicLabel: { fontSize: 9, color: '#666', fontFamily: 'Helvetica-Bold', marginBottom: 2 },
+  dateLine: { marginBottom: 20, flexDirection: 'row', justifyContent: 'space-between' },
+  table: { marginBottom: 20 },
+  tableHeader: { flexDirection: 'row', borderBottomWidth: 1.5, borderBottomColor: '#333', paddingBottom: 4, marginBottom: 4 },
+  tableRow: { flexDirection: 'row', paddingVertical: 3, borderBottomWidth: 0.5, borderBottomColor: '#ddd' },
+  colLabel: { flex: 3 },
+  colTotal: { flex: 1.5, textAlign: 'right' },
+  colPart: { flex: 1.5, textAlign: 'right' },
+  headerCell: { fontFamily: 'Helvetica-Bold', fontSize: 9, color: '#666' },
+  totalRow: { flexDirection: 'row', borderTopWidth: 2, borderTopColor: '#333', paddingTop: 6, marginTop: 4 },
+  totalLabel: { flex: 3, fontFamily: 'Helvetica-Bold', fontSize: 11 },
+  totalVal: { flex: 1.5, textAlign: 'right', fontFamily: 'Helvetica-Bold', fontSize: 11 },
+  paymentSection: { marginBottom: 20, padding: 12, borderWidth: 1, borderColor: '#ddd', borderRadius: 4 },
+  paymentTitle: { fontSize: 11, fontFamily: 'Helvetica-Bold', marginBottom: 8 },
+  paymentRow: { flexDirection: 'row', marginBottom: 3 },
+  paymentLabel: { width: 110, fontFamily: 'Helvetica-Bold', color: '#555' },
+  paymentValue: { flex: 1 },
+  paymentAmount: { fontSize: 14, fontFamily: 'Helvetica-Bold', marginBottom: 6 },
+  qrSection: { alignItems: 'center', marginTop: 10 },
+  qrImage: { width: 130, height: 130 },
+  qrCaption: { marginTop: 6, fontSize: 8, color: '#999', textAlign: 'center' },
+  signatureBlock: { marginTop: 30 },
+  signatureName: { fontSize: 11, fontFamily: 'Helvetica-Bold' },
+  signatureRole: { fontSize: 9, color: '#666', marginBottom: 6 },
+  signatureImage: { width: 150, height: 60 },
+  footer: { position: 'absolute', bottom: 25, left: 40, right: 40, fontSize: 7, color: '#bbb', textAlign: 'center' },
 });
 
-export interface PdfExpenseItem {
-  libelle: string;
-  date: string;
-  montant: number;
-}
-
 export interface PdfPaymentData {
-  coproName: string;
-  coproAddress: string;
-  memberName: string;
-  memberAddress: string;
+  copro: { nom: string; adresse: string; numero_societe: string | null; iban: string };
+  gestionnaire: { nom: string; prenom: string; email: string; telephone: string | null; signature_url: string | null };
+  destinataire: { nom: string; prenom: string; adresse: string };
   reference: string;
-  expenses: PdfExpenseItem[];
-  total: number;
-  iban: string;
-  bic: string;
+  date: string;
+  montant_copro: number;
+  depenses: { libelle: string; montant_total: number; montant_copro: number }[];
+  total_depenses: number;
   currency: string;
+  bic: string;
 }
 
-function PaymentCallDocument({
-  data,
-  qrDataUrl,
-}: {
-  data: PdfPaymentData;
-  qrDataUrl: string | null;
-}) {
-  return React.createElement(
-    Document,
-    null,
-    React.createElement(
-      Page,
-      { size: 'A4', style: styles.page },
-      // Header
-      React.createElement(
-        View,
-        { style: styles.header },
-        React.createElement(Text, { style: styles.headerTitle }, data.coproName),
-        React.createElement(Text, { style: styles.headerSubtitle }, data.coproAddress)
+function PaymentCallDocument({ data, qrDataUrl, signatureDataUrl }: { data: PdfPaymentData; qrDataUrl: string | null; signatureDataUrl: string | null }) {
+  const fmt = (n: number) => n.toFixed(2);
+  const e = React.createElement;
+
+  return e(Document, null,
+    e(Page, { size: 'A4', style: styles.page },
+
+      // Title
+      e(Text, { style: styles.title }, 'Demande de paiement'),
+
+      // Destinataire (aligned right)
+      e(View, { style: styles.destinataire },
+        e(Text, { style: styles.destinataireLabel }, 'À l\'attention de :'),
+        e(Text, { style: styles.destinataireName }, `${data.destinataire.prenom} ${data.destinataire.nom}`),
+        e(Text, null, data.destinataire.adresse),
       ),
-      // Reference
-      React.createElement(
-        View,
-        { style: styles.section },
-        React.createElement(
-          Text,
-          { style: { fontSize: 11, fontFamily: 'Helvetica-Bold' } },
-          `Appel de paiement: ${data.reference}`
+
+      // Copro
+      e(View, { style: styles.coproBlock },
+        e(Text, { style: styles.coproName }, data.copro.nom),
+        e(Text, null, data.copro.adresse),
+        data.copro.numero_societe ? e(Text, { style: { fontSize: 9, color: '#666' } }, `N° d'entreprise : ${data.copro.numero_societe}`) : null,
+      ),
+
+      // Syndic
+      e(View, { style: styles.syndicBlock },
+        e(Text, { style: styles.syndicLabel }, 'Syndic :'),
+        e(Text, { style: { fontFamily: 'Helvetica-Bold' } }, `${data.gestionnaire.prenom} ${data.gestionnaire.nom}`),
+        e(Text, null, `Email : ${data.gestionnaire.email}`),
+        data.gestionnaire.telephone ? e(Text, null, `Tél : ${data.gestionnaire.telephone}`) : null,
+      ),
+
+      // Date + Reference
+      e(View, { style: styles.dateLine },
+        e(Text, null, `Date : ${data.date}`),
+        e(Text, { style: { fontFamily: 'Helvetica-Bold' } }, `Réf : ${data.reference}`),
+      ),
+
+      // Table
+      e(View, { style: styles.table },
+        e(View, { style: styles.tableHeader },
+          e(Text, { style: [styles.colLabel, styles.headerCell] }, 'Libellé'),
+          e(Text, { style: [styles.colTotal, styles.headerCell] }, 'Montant total'),
+          e(Text, { style: [styles.colPart, styles.headerCell] }, 'Votre part'),
         ),
-        React.createElement(
-          Text,
-          { style: { fontSize: 9, color: '#666', marginTop: 4 } },
-          `Date: ${new Date().toLocaleDateString('fr-FR')}`
-        )
-      ),
-      // Member Info
-      React.createElement(
-        View,
-        { style: styles.memberInfo },
-        React.createElement(Text, { style: styles.memberName }, data.memberName),
-        React.createElement(Text, null, data.memberAddress)
-      ),
-      // Expenses Table
-      React.createElement(
-        View,
-        { style: styles.section },
-        React.createElement(Text, { style: styles.sectionTitle }, 'Charges'),
-        React.createElement(
-          View,
-          { style: styles.table },
-          // Table Header
-          React.createElement(
-            View,
-            { style: styles.tableHeader },
-            React.createElement(
-              Text,
-              { style: [styles.colLabel, styles.headerCell] },
-              'Description'
-            ),
-            React.createElement(
-              Text,
-              { style: [styles.colDate, styles.headerCell] },
-              'Date'
-            ),
-            React.createElement(
-              Text,
-              { style: [styles.colAmount, styles.headerCell] },
-              'Montant'
-            )
-          ),
-          // Table Rows
-          ...data.expenses.map((expense, index) =>
-            React.createElement(
-              View,
-              { style: styles.tableRow, key: String(index) },
-              React.createElement(Text, { style: styles.colLabel }, expense.libelle),
-              React.createElement(Text, { style: styles.colDate }, expense.date),
-              React.createElement(
-                Text,
-                { style: styles.colAmount },
-                `${expense.montant.toFixed(2)} ${data.currency}`
-              )
-            )
-          ),
-          // Total
-          React.createElement(
-            View,
-            { style: styles.totalRow },
-            React.createElement(Text, { style: styles.totalLabel }, 'Total'),
-            React.createElement(
-              Text,
-              { style: styles.totalAmount },
-              `${data.total.toFixed(2)} ${data.currency}`
-            )
+        ...data.depenses.map((d, i) =>
+          e(View, { style: styles.tableRow, key: String(i) },
+            e(Text, { style: styles.colLabel }, d.libelle),
+            e(Text, { style: styles.colTotal }, `${fmt(d.montant_total)} ${data.currency}`),
+            e(Text, { style: styles.colPart }, `${fmt(d.montant_copro)} ${data.currency}`),
           )
-        )
+        ),
+        e(View, { style: styles.totalRow },
+          e(Text, { style: styles.totalLabel }, 'TOTAL'),
+          e(Text, { style: styles.totalVal }, `${fmt(data.total_depenses)} ${data.currency}`),
+          e(Text, { style: styles.totalVal }, `${fmt(data.montant_copro)} ${data.currency}`),
+        ),
       ),
-      // Bank Info
-      React.createElement(
-        View,
-        { style: styles.section },
-        React.createElement(Text, { style: styles.sectionTitle }, 'Informations bancaires'),
-        React.createElement(
-          View,
-          { style: styles.bankInfo },
-          React.createElement(
-            View,
-            { style: styles.bankRow },
-            React.createElement(Text, { style: styles.bankLabel }, 'IBAN:'),
-            React.createElement(Text, { style: styles.bankValue }, data.iban)
-          ),
-          React.createElement(
-            View,
-            { style: styles.bankRow },
-            React.createElement(Text, { style: styles.bankLabel }, 'BIC:'),
-            React.createElement(Text, { style: styles.bankValue }, data.bic)
-          ),
-          React.createElement(
-            View,
-            { style: styles.bankRow },
-            React.createElement(Text, { style: styles.bankLabel }, 'Communication:'),
-            React.createElement(Text, { style: styles.bankValue }, data.reference)
-          )
-        )
+
+      // Modalités de paiement
+      e(View, { style: styles.paymentSection },
+        e(Text, { style: styles.paymentTitle }, 'Modalités de paiement'),
+        e(Text, { style: styles.paymentAmount }, `Montant à payer : ${fmt(data.montant_copro)} ${data.currency}`),
+        e(View, { style: styles.paymentRow },
+          e(Text, { style: styles.paymentLabel }, 'IBAN :'),
+          e(Text, { style: styles.paymentValue }, data.copro.iban),
+        ),
+        e(View, { style: styles.paymentRow },
+          e(Text, { style: styles.paymentLabel }, 'Bénéficiaire :'),
+          e(Text, { style: styles.paymentValue }, data.copro.nom),
+        ),
+        e(View, { style: styles.paymentRow },
+          e(Text, { style: styles.paymentLabel }, 'Communication :'),
+          e(Text, { style: styles.paymentValue }, data.reference),
+        ),
+        qrDataUrl ? e(View, { style: styles.qrSection },
+          e(Image, { style: styles.qrImage, src: qrDataUrl }),
+          e(Text, { style: styles.qrCaption }, 'Scannez ce QR code avec votre application bancaire'),
+        ) : null,
       ),
-      // QR Code
-      qrDataUrl
-        ? React.createElement(
-            View,
-            { style: styles.qrSection },
-            React.createElement(Text, { style: styles.sectionTitle }, 'Paiement rapide'),
-            React.createElement(Image, { style: styles.qrImage, src: qrDataUrl }),
-            React.createElement(
-              Text,
-              { style: styles.qrCaption },
-              'Scannez ce QR code avec votre application bancaire'
-            )
-          )
-        : null,
+
+      // Signature
+      e(View, { style: styles.signatureBlock },
+        e(Text, { style: styles.signatureName }, `${data.gestionnaire.prenom} ${data.gestionnaire.nom}`),
+        e(Text, { style: styles.signatureRole }, `Syndic – ${data.copro.nom}`),
+        signatureDataUrl ? e(Image, { style: styles.signatureImage, src: signatureDataUrl }) : null,
+      ),
+
       // Footer
-      React.createElement(
-        View,
-        { style: styles.footer },
-        React.createElement(
-          Text,
-          null,
-          `${data.coproName} - Document genere automatiquement par TinyCopro`
-        )
-      )
+      e(View, { style: styles.footer },
+        e(Text, null, `${data.copro.nom} – Document généré par TinyCopro`),
+      ),
     )
   );
 }
 
+async function fetchImageAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch { return null; }
+}
+
 export async function generatePaymentPdf(data: PdfPaymentData): Promise<Blob> {
-  // Generate QR code data URL
   let qrDataUrl: string | null = null;
   try {
-    if (data.iban && data.bic) {
+    if (data.copro.iban) {
       const epcData = generateEpcQrData({
-        iban: data.iban,
+        iban: data.copro.iban,
         bic: data.bic,
-        beneficiaryName: data.coproName.substring(0, 70),
-        amount: data.total,
+        beneficiaryName: data.copro.nom.substring(0, 70),
+        amount: data.montant_copro,
         reference: data.reference,
         currency: data.currency,
       });
-      qrDataUrl = await QRCode.toDataURL(epcData, {
-        width: 300,
-        margin: 2,
-        errorCorrectionLevel: 'M',
-      });
+      qrDataUrl = await QRCode.toDataURL(epcData, { width: 300, margin: 2, errorCorrectionLevel: 'M' });
     }
-  } catch {
-    // QR generation failed, continue without it
+  } catch { /* QR failed, continue */ }
+
+  // Fetch signature as data URL (CORS-safe)
+  let signatureDataUrl: string | null = null;
+  if (data.gestionnaire.signature_url) {
+    signatureDataUrl = await fetchImageAsDataUrl(data.gestionnaire.signature_url);
   }
 
-  const doc = React.createElement(PaymentCallDocument, { data, qrDataUrl });
+  const doc = React.createElement(PaymentCallDocument, { data, qrDataUrl, signatureDataUrl });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const blob = await pdf(doc as any).toBlob();
   return blob;

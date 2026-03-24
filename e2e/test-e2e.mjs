@@ -1589,6 +1589,22 @@ async function testDeposit(page) {
   } catch (err) { fail(name, err.message); }
 }
 
+// ---------- NEW: Signature upload ----------
+
+async function testSignatureSection(page) {
+  const name = 'TC-PDF-2.1 Profile page has signature section';
+  try {
+    await page.goto(`${BASE}/fr/profil/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await waitForPageReady(page, 20000);
+    const bodyText = await getBodyText(page);
+    if (bodyText.includes('Signature') || bodyText.includes('signature')) {
+      ok(name);
+    } else {
+      fail(name, 'Signature section not found on profile page');
+    }
+  } catch (err) { fail(name, err.message); }
+}
+
 // ==========================================================================
 // Update test-cases.md with results
 // ==========================================================================
@@ -1748,6 +1764,7 @@ async function main() {
 
         // ── Profile / i18n / Logout ──
         console.log('\n📋 Profile / i18n / Logout'); console.log('─'.repeat(40));
+        await testSignatureSection(gestiPage2);
         await testProfileEdit(gestiPage2);
         await testLanguageSwitcher(gestiPage2);
         await testLogout(gestiPage2);

@@ -12,7 +12,9 @@ import { useCoproContext } from '@/components/copro/CoproContext';
 import { GeneratePaymentForm } from '@/components/paiements/GeneratePaymentForm';
 import { MarkAsPaidDialog } from '@/components/paiements/MarkAsPaidDialog';
 import { generatePaymentPdf, downloadBlob } from '@/lib/pdf-generator';
-import type { PdfPaymentData } from '@/lib/pdf-generator';
+import { getPaymentPdfData } from '@/services/paiement';
+import { generateEpcQrData } from '@/lib/qr-generator';
+import QRCode from 'qrcode';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -56,7 +58,24 @@ export function PaiementsPageContent() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
   const [selectedAppel, setSelectedAppel] = useState<AppelWithMember | null>(null);
+  const [selectedQrUrl, setSelectedQrUrl] = useState<string | null>(null);
   const [isDepositing, setIsDepositing] = useState(false);
+
+  // Generate QR when a payment is selected
+  useEffect(() => {
+    if (!selectedAppel || !copro?.iban) { setSelectedQrUrl(null); return; }
+    const epcData = generateEpcQrData({
+      iban: copro.iban,
+      bic: copro.bic ?? '',
+      beneficiaryName: copro.nom.substring(0, 70),
+      amount: selectedAppel.montant_total,
+      reference: selectedAppel.reference,
+      currency: copro.devise,
+    });
+    QRCode.toDataURL(epcData, { width: 200, margin: 2, errorCorrectionLevel: 'M' })
+      .then(url => setSelectedQrUrl(url))
+      .catch(() => setSelectedQrUrl(null));
+  }, [selectedAppel, copro]);
 
   const tv = useTranslations('validation');
   const depositSchema = createDepositSchema(tv);
@@ -148,19 +167,11 @@ export function PaiementsPageContent() {
     if (!copro) return;
     setDownloadingId(appel.id);
     try {
-      const expenses = appel.appel_repartitions.map(ar => ({
-        libelle: ar.repartitions.depenses.libelle,
-        date: ar.repartitions.depenses.date_depense,
-        montant: ar.repartitions.montant_override ?? ar.repartitions.montant_du,
-      }));
-      const pdfData: PdfPaymentData = {
-        coproName: copro.nom, coproAddress: copro.adresse,
-        memberName: getMemberName(appel), memberAddress: appel.membres.profiles.adresse,
-        reference: appel.reference, expenses, total: appel.montant_total,
-        iban: copro.iban, bic: copro.bic ?? '', currency: copro.devise,
-      };
-      const blob = await generatePaymentPdf(pdfData);
-      downloadBlob(blob, `${appel.reference}.pdf`);
+      const { data: pdfData } = await getPaymentPdfData(appel.id);
+      if (pdfData) {
+        const blob = await generatePaymentPdf({ ...pdfData, currency: copro.devise, bic: copro.bic ?? '' });
+        downloadBlob(blob, `${appel.reference}.pdf`);
+      }
     } catch { /* PDF error */ } finally { setDownloadingId(null); }
   };
 
@@ -356,6 +367,28 @@ export function PaiementsPageContent() {
                       <span className="font-medium">{(ar.repartitions.montant_override ?? ar.repartitions.montant_du).toFixed(2)} {copro?.devise}</span>
                     </div>
                   ))}
+                </div>
+
+                {/* Modalités de paiement */}
+                <div className="border rounded-lg p-3 space-y-2">
+                  <p className="text-sm font-medium">{t('paymentMethod')}</p>
+                  <p className="text-lg font-bold">{selectedAppel.montant_total.toFixed(2)} {copro?.devise}</p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">IBAN</span>
+                      <span className="font-mono">{copro?.iban}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">{t('paymentReference')}</span>
+                      <span className="font-mono">{selectedAppel.reference}</span>
+                    </div>
+                  </div>
+                  {selectedQrUrl && (
+                    <div className="flex flex-col items-center pt-2">
+                      <img src={selectedQrUrl} alt="QR SEPA" className="w-40 h-40" />
+                      <p className="text-xs text-muted-foreground mt-1">Scannez avec votre app bancaire</p>
+                    </div>
+                  )}
                 </div>
 
                 {renderActions(selectedAppel)}

@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import { Paperclip } from 'lucide-react';
+import { uploadSignature } from '@/services/paiement';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -185,6 +187,34 @@ export default function ProfilPage() {
               {isSubmitting ? '...' : tCommon('save')}
             </Button>
           </form>
+
+          {/* Signature section */}
+          <div className="mt-6 pt-6 border-t space-y-3">
+            <Label>{t('signature')}</Label>
+            <p className="text-xs text-muted-foreground">{t('signatureFormat')}</p>
+            {(profile as any)?.signature_url && (
+              <img src={(profile as any).signature_url} alt="Signature" className="h-16 border rounded p-1" />
+            )}
+            <input
+              type="file"
+              accept=".png"
+              className="hidden"
+              id="signature-upload"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (file.type !== 'image/png') { toast.error(t('signatureFormat')); return; }
+                const { error } = await uploadSignature(file);
+                if (error) { toast.error(error.message); return; }
+                toast.success(t('signatureUploaded'));
+                window.location.reload();
+              }}
+            />
+            <Button variant="outline" onClick={() => document.getElementById('signature-upload')?.click()}>
+              <Paperclip className="h-4 w-4 mr-1.5" />
+              {t('uploadSignature')}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

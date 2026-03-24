@@ -58,6 +58,29 @@ export async function createDeposit(params: {
   return { depositId: data as string | null, error };
 }
 
+export async function uploadSignature(file: File) {
+  const filePath = `signatures/${crypto.randomUUID()}.png`;
+  const { error: uploadError } = await supabase.storage.from('justificatifs').upload(filePath, file);
+  if (uploadError) return { error: uploadError };
+  const { data: { publicUrl } } = supabase.storage.from('justificatifs').getPublicUrl(filePath);
+  const { error } = await supabase.rpc('upload_signature', { p_url: publicUrl });
+  return { publicUrl, error };
+}
+
+export async function getPaymentPdfData(appelId: string) {
+  const { data, error } = await supabase.rpc('get_payment_pdf_data', { p_appel_id: appelId });
+  return { data: data as {
+    copro: { nom: string; adresse: string; numero_societe: string | null; iban: string };
+    gestionnaire: { nom: string; prenom: string; email: string; telephone: string | null; signature_url: string | null };
+    destinataire: { nom: string; prenom: string; adresse: string };
+    reference: string;
+    date: string;
+    montant_copro: number;
+    depenses: { libelle: string; montant_total: number; montant_copro: number }[];
+    total_depenses: number;
+  } | null, error };
+}
+
 export async function listAppels(coproId: string, membreId?: string) {
   const { data, error } = await supabase.rpc('get_appels', { p_copro_id: coproId, p_membre_id: membreId ?? null });
   return { data: data as any[] | null, error };

@@ -47,7 +47,11 @@
     "title": "Mon profil",
     "editProfile": "Modifier mon profil",
     "saveSuccess": "Profil mis à jour avec succès.",
-    "emailNotEditable": "L'email ne peut pas être modifié."
+    "emailNotEditable": "L'email ne peut pas être modifié.",
+    "signature": "Signature",
+    "uploadSignature": "Uploader votre signature",
+    "signatureFormat": "Format PNG uniquement",
+    "signatureUploaded": "Signature enregistrée"
   },
   "copro": {
     "title": "Mes copropriétés",

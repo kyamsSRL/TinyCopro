@@ -10,7 +10,7 @@ import { sendNotification } from '@/lib/notifications';
 import { generatePayment, getRepartitionsEnCours } from '@/services/paiement';
 import { useCoproContext } from '@/components/copro/CoproContext';
 import { generatePaymentPdf, downloadBlob } from '@/lib/pdf-generator';
-import type { PdfPaymentData } from '@/lib/pdf-generator';
+import { getPaymentPdfData } from '@/services/paiement';
 import { Button } from '@/components/ui/button';
 import {
   DialogHeader,
@@ -101,26 +101,12 @@ export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
 
       const reference = paymentResult.reference;
 
-      // Generate PDF
-      const pdfData: PdfPaymentData = {
-        coproName: copro.nom,
-        coproAddress: copro.adresse,
-        memberName: `${profile.prenom} ${profile.nom}`,
-        memberAddress: profile.adresse,
-        reference,
-        expenses: selectedRepartitions.map(r => ({
-          libelle: r.depenses.libelle,
-          date: r.depenses.date_depense,
-          montant: r.montant_override ?? r.montant_du,
-        })),
-        total,
-        iban: copro.iban,
-        bic: copro.bic ?? '',
-        currency: copro.devise,
-      };
-
-      const blob = await generatePaymentPdf(pdfData);
-      downloadBlob(blob, `${reference}.pdf`);
+      // Generate PDF from backend data
+      const { data: pdfData } = await getPaymentPdfData(paymentResult.appel_id);
+      if (pdfData) {
+        const blob = await generatePaymentPdf({ ...pdfData, currency: copro.devise, bic: copro.bic ?? '' });
+        downloadBlob(blob, `${reference}.pdf`);
+      }
 
       logAudit({
         coproprieteId: copro.id,

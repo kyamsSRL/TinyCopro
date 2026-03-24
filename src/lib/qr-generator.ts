@@ -4,13 +4,13 @@
  */
 export function generateEpcQrData(params: {
   iban: string;
-  bic: string;
+  bic?: string;
   beneficiaryName: string;
   amount: number;
   reference: string;
   currency?: string;
 }): string {
-  const { iban, bic, beneficiaryName, amount, reference, currency = 'EUR' } = params;
+  const { iban, bic = '', beneficiaryName, amount, reference, currency = 'EUR' } = params;
   const lines = [
     'BCD',           // Service Tag
     '002',           // Version

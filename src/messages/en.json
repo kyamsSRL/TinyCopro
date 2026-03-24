@@ -47,7 +47,11 @@
     "title": "My profile",
     "editProfile": "Edit profile",
     "saveSuccess": "Profile updated successfully.",
-    "emailNotEditable": "Email cannot be changed."
+    "emailNotEditable": "Email cannot be changed.",
+    "signature": "Signature",
+    "uploadSignature": "Upload your signature",
+    "signatureFormat": "PNG format only",
+    "signatureUploaded": "Signature saved"
   },
   "copro": {
     "title": "My co-ownerships",

@@ -488,6 +488,7 @@ export type Database = {
           numero_societe: string | null
           prenom: string
           societe: string | null
+          signature_url: string | null
           telephone: string | null
           updated_at: string
         }
@@ -589,6 +590,8 @@ export type Database = {
       get_exercices: { Args: { p_copro_id: string }; Returns: unknown }
       get_export_data: { Args: { p_copro_id: string; p_exercice_id: string }; Returns: unknown }
       get_member_emails: { Args: { p_copro_id: string }; Returns: unknown }
+      get_payment_pdf_data: { Args: { p_appel_id: string }; Returns: unknown }
+      upload_signature: { Args: { p_url: string }; Returns: undefined }
       get_repartitions_en_cours: { Args: { p_copro_id: string }; Returns: unknown }
       get_categories: { Args: { p_copro_id: string }; Returns: unknown }
       get_copro_detail: { Args: { p_copro_id: string }; Returns: unknown }

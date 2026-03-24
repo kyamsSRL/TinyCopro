@@ -191,6 +191,39 @@
 
 ---
 
+## Epic PDF : Document de demande de paiement (V1.2)
+
+### US-PDF-1 : Format professionnel du PDF
+**En tant que** membre,
+**je veux** recevoir un PDF de demande de paiement professionnel,
+**afin de** savoir exactement ce que je dois payer et comment.
+
+**Critères d'acceptation :**
+- Destinataire : nom + adresse du copropriétaire
+- Copropriété : nom + adresse + n° d'entreprise
+- Syndic : nom + email + téléphone
+- Date + référence
+- Tableau : 3 colonnes (libellé, montant total, part du copropriétaire)
+- Totaux des deux colonnes
+- Modalités : montant à payer + IBAN + bénéficiaire + communication + QR code SEPA
+- Signature du syndic (nom + image PNG si uploadée)
+- Toutes les données calculées côté backend (RPC `get_payment_pdf_data`)
+
+### US-PDF-2 : Upload de signature
+**En tant que** gestionnaire,
+**je veux** uploader ma signature (PNG),
+**afin qu'** elle apparaisse sur les demandes de paiement.
+
+**Critères d'acceptation :**
+- Upload dans la page Profil (section "Signature")
+- Format PNG uniquement
+- Stocké dans Supabase Storage
+- URL dans `profiles.signature_url`
+- Optionnel : si pas de signature, le PDF affiche juste le nom
+- Remplacement possible à tout moment
+
+---
+
 ## Epic 4 : Paiements
 
 ### US-4.1 : Générer une invitation de paiement (copropriétaire)

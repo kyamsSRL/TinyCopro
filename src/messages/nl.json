@@ -47,7 +47,11 @@
     "title": "Mijn profiel",
     "editProfile": "Profiel bewerken",
     "saveSuccess": "Profiel succesvol bijgewerkt.",
-    "emailNotEditable": "E-mail kan niet worden gewijzigd."
+    "emailNotEditable": "E-mail kan niet worden gewijzigd.",
+    "signature": "Handtekening",
+    "uploadSignature": "Upload uw handtekening",
+    "signatureFormat": "Alleen PNG-formaat",
+    "signatureUploaded": "Handtekening opgeslagen"
   },
   "copro": {
     "title": "Mijn mede-eigendommen",
