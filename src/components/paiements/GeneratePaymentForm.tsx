@@ -3,14 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { FileDown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { logAudit } from '@/lib/audit';
 import { sendNotification } from '@/lib/notifications';
 import { generatePayment, getRepartitionsEnCours } from '@/services/paiement';
 import { useCoproContext } from '@/components/copro/CoproContext';
-import { generatePaymentPdf, downloadBlob } from '@/lib/pdf-generator';
-import { getPaymentPdfData } from '@/services/paiement';
 import { Button } from '@/components/ui/button';
 import {
   DialogHeader,
@@ -28,7 +25,7 @@ type RepartitionWithDepense = Repartition & {
 };
 
 interface GeneratePaymentFormProps {
-  onSuccess?: () => void;
+  onSuccess?: (appelId: string) => void;
 }
 
 export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
@@ -101,13 +98,6 @@ export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
 
       const reference = paymentResult.reference;
 
-      // Generate PDF from backend data
-      const { data: pdfData } = await getPaymentPdfData(paymentResult.appel_id);
-      if (pdfData) {
-        const blob = await generatePaymentPdf({ ...pdfData, currency: copro.devise, bic: copro.bic ?? '' });
-        downloadBlob(blob, `${reference}.pdf`);
-      }
-
       logAudit({
         coproprieteId: copro.id,
         action: 'create',
@@ -131,7 +121,7 @@ export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
       }
 
       toast.success(tc('success'));
-      onSuccess?.();
+      onSuccess?.(paymentResult.appel_id);
     } catch {
       toast.error(tc('error'));
     } finally {
@@ -153,6 +143,12 @@ export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
         <DialogTitle>{t('generate')}</DialogTitle>
         <DialogDescription>{t('selectDepenses')}</DialogDescription>
       </DialogHeader>
+
+      {currentMembre && (
+        <div className="text-sm text-muted-foreground mt-2">
+          {t('availableBalance')} : <span className="font-bold text-foreground">{(currentMembre.solde ?? 0).toFixed(2)} {copro?.devise}</span>
+        </div>
+      )}
 
       {repartitions.length === 0 ? (
         <div className="py-8 text-center text-muted-foreground">
@@ -202,11 +198,30 @@ export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
             })}
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t">
-            <span className="font-medium">{t('totalToPay')}</span>
-            <span className="text-lg font-bold">
-              {total.toFixed(2)} {copro?.devise}
-            </span>
+          <div className="pt-2 border-t space-y-1">
+            {(() => {
+              const solde = currentMembre?.solde ?? 0;
+              const deduction = Math.min(solde, total);
+              const remaining = total - deduction;
+              return (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>{t('totalToPay')}</span>
+                    <span className="font-medium">{total.toFixed(2)} {copro?.devise}</span>
+                  </div>
+                  {deduction > 0 && (
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>{t('soldeDeducted')}</span>
+                      <span>-{deduction.toFixed(2)} {copro?.devise}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{t('remainingToPay')}</span>
+                    <span className="text-lg font-bold">{remaining.toFixed(2)} {copro?.devise}</span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           <DialogFooter>
@@ -214,8 +229,7 @@ export function GeneratePaymentForm({ onSuccess }: GeneratePaymentFormProps) {
               onClick={handleGenerate}
               disabled={isGenerating || selectedRepartitions.length === 0}
             >
-              <FileDown className="mr-1.5" />
-              {isGenerating ? '...' : t('downloadPdf')}
+              {isGenerating ? '...' : t('generate')}
             </Button>
           </DialogFooter>
         </div>

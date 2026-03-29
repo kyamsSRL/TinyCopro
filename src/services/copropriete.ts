@@ -29,17 +29,19 @@ export async function getCoproDetail(coproId: string) {
   return { data: data as { copro: any; membres: any[]; exercice: any } | null, error };
 }
 
-export async function getDashboardStats(coproId: string) {
-  const { data, error } = await supabase.rpc('get_dashboard_stats', { p_copro_id: coproId });
+export async function getDashboardStats(coproId: string, exerciceId?: string) {
+  const { data, error } = await supabase.rpc('get_dashboard_stats', { p_copro_id: coproId, p_exercice_id: exerciceId ?? null });
   return { data: data as {
-    my_total_due: number;
+    my_solde: number;
     my_pending: number;
     my_paid: number;
     copro_total_expenses: number;
     copro_collected: number;
     copro_outstanding: number;
     copro_iban: string;
-    member_soldes: { membre_id: string; nom: string; prenom: string; alias: string | null; du: number; depot: number }[];
+    member_soldes: { membre_id: string; nom: string; prenom: string; alias: string | null; solde: number }[];
+    transactions: { type: string; montant: number; reference: string | null; date: string }[];
+    exercice_id: string;
     category_breakdown: { categorie: string; total: number }[];
   } | null, error };
 }

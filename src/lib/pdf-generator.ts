@@ -57,8 +57,10 @@ export interface PdfPaymentData {
   reference: string;
   date: string;
   montant_copro: number;
+  solde_deduit?: number;
   depenses: { libelle: string; montant_total: number; montant_copro: number }[];
   total_depenses: number;
+  provision?: { montant_total: number; montant_copro: number };
   currency: string;
   bic: string;
 }
@@ -115,40 +117,53 @@ function PaymentCallDocument({ data, qrDataUrl, signatureDataUrl }: { data: PdfP
             e(Text, { style: styles.colPart }, `${fmt(d.montant_copro)} ${data.currency}`),
           )
         ),
+        data.provision ? e(View, { style: styles.tableRow, key: 'provision' },
+          e(Text, { style: [styles.colLabel, { fontFamily: 'Helvetica-Bold' }] }, 'Provisionnement'),
+          e(Text, { style: styles.colTotal }, `${fmt(data.provision.montant_total)} ${data.currency}`),
+          e(Text, { style: styles.colPart }, `${fmt(data.provision.montant_copro)} ${data.currency}`),
+        ) : null,
         e(View, { style: styles.totalRow },
           e(Text, { style: styles.totalLabel }, 'TOTAL'),
-          e(Text, { style: styles.totalVal }, `${fmt(data.total_depenses)} ${data.currency}`),
-          e(Text, { style: styles.totalVal }, `${fmt(data.montant_copro)} ${data.currency}`),
+          e(Text, { style: styles.totalVal }, `${fmt(data.total_depenses + (data.provision?.montant_total ?? 0))} ${data.currency}`),
+          e(Text, { style: styles.totalVal }, `${fmt(data.montant_copro + (data.provision?.montant_copro ?? 0))} ${data.currency}`),
         ),
       ),
 
-      // Modalités de paiement
-      e(View, { style: styles.paymentSection },
-        e(Text, { style: styles.paymentTitle }, 'Modalités de paiement'),
-        e(Text, { style: styles.paymentAmount }, `Montant à payer : ${fmt(data.montant_copro)} ${data.currency}`),
-        e(View, { style: styles.paymentRow },
-          e(Text, { style: styles.paymentLabel }, 'IBAN :'),
-          e(Text, { style: styles.paymentValue }, data.copro.iban),
+      // Modalités + Signature — keep together, never split across pages
+      e(View, { wrap: false },
+        // Modalités de paiement
+        e(View, { style: styles.paymentSection },
+          e(Text, { style: styles.paymentTitle }, 'Modalités de paiement'),
+          data.solde_deduit && data.solde_deduit > 0
+            ? e(View, null,
+                e(Text, { style: { marginBottom: 2 } }, `Solde déduit : -${fmt(data.solde_deduit)} ${data.currency}`),
+                e(Text, { style: styles.paymentAmount }, `Montant à payer : ${fmt(data.montant_copro)} ${data.currency}`),
+              )
+            : e(Text, { style: styles.paymentAmount }, `Montant à payer : ${fmt(data.montant_copro)} ${data.currency}`),
+          e(View, { style: styles.paymentRow },
+            e(Text, { style: styles.paymentLabel }, 'IBAN :'),
+            e(Text, { style: styles.paymentValue }, data.copro.iban),
+          ),
+          e(View, { style: styles.paymentRow },
+            e(Text, { style: styles.paymentLabel }, 'Bénéficiaire :'),
+            e(Text, { style: styles.paymentValue }, data.copro.nom),
+          ),
+          e(View, { style: styles.paymentRow },
+            e(Text, { style: styles.paymentLabel }, 'Communication :'),
+            e(Text, { style: styles.paymentValue }, data.reference),
+          ),
+          qrDataUrl ? e(View, { style: styles.qrSection },
+            e(Image, { style: styles.qrImage, src: qrDataUrl }),
+            e(Text, { style: styles.qrCaption }, 'Scannez ce QR code avec votre application bancaire'),
+          ) : null,
         ),
-        e(View, { style: styles.paymentRow },
-          e(Text, { style: styles.paymentLabel }, 'Bénéficiaire :'),
-          e(Text, { style: styles.paymentValue }, data.copro.nom),
-        ),
-        e(View, { style: styles.paymentRow },
-          e(Text, { style: styles.paymentLabel }, 'Communication :'),
-          e(Text, { style: styles.paymentValue }, data.reference),
-        ),
-        qrDataUrl ? e(View, { style: styles.qrSection },
-          e(Image, { style: styles.qrImage, src: qrDataUrl }),
-          e(Text, { style: styles.qrCaption }, 'Scannez ce QR code avec votre application bancaire'),
-        ) : null,
-      ),
 
-      // Signature
-      e(View, { style: styles.signatureBlock },
-        e(Text, { style: styles.signatureName }, `${data.gestionnaire.prenom} ${data.gestionnaire.nom}`),
-        e(Text, { style: styles.signatureRole }, `Syndic – ${data.copro.nom}`),
-        signatureDataUrl ? e(Image, { style: styles.signatureImage, src: signatureDataUrl }) : null,
+        // Signature
+        e(View, { style: styles.signatureBlock },
+          e(Text, { style: styles.signatureName }, `${data.gestionnaire.prenom} ${data.gestionnaire.nom}`),
+          e(Text, { style: styles.signatureRole }, `Syndic – ${data.copro.nom}`),
+          signatureDataUrl ? e(Image, { style: styles.signatureImage, src: signatureDataUrl }) : null,
+        ),
       ),
 
       // Footer
@@ -175,7 +190,8 @@ async function fetchImageAsDataUrl(url: string): Promise<string | null> {
 export async function generatePaymentPdf(data: PdfPaymentData): Promise<Blob> {
   let qrDataUrl: string | null = null;
   try {
-    if (data.copro.iban) {
+    // No QR if amount is 0 (fully covered by solde)
+    if (data.copro.iban && data.montant_copro > 0) {
       const epcData = generateEpcQrData({
         iban: data.copro.iban,
         bic: data.bic,

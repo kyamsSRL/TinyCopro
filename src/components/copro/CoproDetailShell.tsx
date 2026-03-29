@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -10,18 +9,10 @@ import {
   CreditCard,
   Users,
   Settings,
-  Menu,
 } from 'lucide-react';
 import { useCoproDetail } from '@/hooks/useCopro';
 import { CoproContext } from '@/components/copro/CoproContext';
 import { Separator } from '@/components/ui/separator';
-import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -36,7 +27,6 @@ export function CoproDetailShell({ children }: { children: React.ReactNode }) {
   const params = useParams();
   const pathname = usePathname();
   const t = useTranslations('copro');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // In static export, useParams().slug may be [] even when the URL has segments.
   // Parse from pathname as fallback.
@@ -82,13 +72,7 @@ export function CoproDetailShell({ children }: { children: React.ReactNode }) {
     <CoproContext.Provider value={coproDetail}>
       <div className="container mx-auto max-w-6xl px-4 py-6">
         <div className="mb-6">
-          <Link
-            href={`/${locale}/copros`}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            &larr; {t('title')}
-          </Link>
-          <h1 className="text-2xl font-bold mt-2">{copro.nom}</h1>
+          <h1 className="text-2xl font-bold">{copro.nom}</h1>
           <p className="text-sm text-muted-foreground">{copro.adresse}</p>
         </div>
 
@@ -112,7 +96,7 @@ export function CoproDetailShell({ children }: { children: React.ReactNode }) {
                   className={cn(
                     'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap',
                     isActive
-                      ? 'bg-primary/10 text-primary'
+                      ? 'bg-muted text-primary'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   )}
                 >
@@ -121,56 +105,47 @@ export function CoproDetailShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+            <div className="mt-auto pt-4">
+              <Link
+                href={`/${locale}/copros`}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                &larr; {t('title')}
+              </Link>
+            </div>
           </nav>
 
-          {/* Mobile floating menu */}
-          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetContent side="left">
-              <SheetHeader>
-                <SheetTitle>{copro.nom}</SheetTitle>
-              </SheetHeader>
-              <nav className="flex flex-col gap-1 px-4">
-                {navItems.map((item) => {
-                  const href = `${basePath}${item.segment}`;
-                  const isActive =
-                    item.segment === ''
-                      ? pathname === basePath || pathname === `${basePath}/`
-                      : pathname.startsWith(href);
-                  const Icon = item.icon;
-
-                  return (
-                    <Link
-                      key={item.key}
-                      href={href}
-                      onClick={() => setSidebarOpen(false)}
-                      className={cn(
-                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                        isActive
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                      )}
-                    >
-                      <Icon className="h-5 w-5 shrink-0" />
-                      {t(item.key)}
-                    </Link>
-                  );
-                })}
-              </nav>
-            </SheetContent>
-          </Sheet>
-
-          <Button
-            variant="outline"
-            size="icon"
-            className="fixed bottom-4 left-4 z-50 md:hidden h-12 w-12 rounded-full shadow-lg"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-
-          <div className="flex-1 min-w-0">{children}</div>
+          <div className="flex-1 min-w-0 pb-16 md:pb-0">{children}</div>
         </div>
       </div>
+
+      {/* Mobile bottom navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-background border-t">
+        <div className="flex items-center justify-around h-14">
+          {navItems.map((item) => {
+            const href = `${basePath}${item.segment}`;
+            const isActive =
+              item.segment === ''
+                ? pathname === basePath || pathname === `${basePath}/`
+                : pathname.startsWith(href);
+            const Icon = item.icon;
+
+            return (
+              <Link
+                key={item.key}
+                href={href}
+                className={cn(
+                  'flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors',
+                  isActive ? 'text-primary' : 'text-muted-foreground'
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                {t(item.key)}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </CoproContext.Provider>
   );
 }

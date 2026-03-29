@@ -8,7 +8,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { createMarkPaidSchema } from '@/lib/validation';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { logAudit } from '@/lib/audit';
 import { sendNotification } from '@/lib/notifications';
@@ -60,7 +59,6 @@ export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess,
     resolver: zodResolver(markPaidSchema),
     defaultValues: {
       date_paiement: new Date().toISOString().split('T')[0],
-      reference: '',
     },
   });
 
@@ -69,28 +67,24 @@ export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess,
     setIsSubmitting(true);
 
     try {
-      // Upload proof file if provided
-      let preuveUrl: string | null = null;
-      if (proofFile && coproprieteId) {
-        const result = await uploadProof({ paiementId: '', coproId: coproprieteId, file: proofFile });
-        if (result.error) {
-          toast.error(result.error.message);
-          return;
-        }
-        preuveUrl = result.publicUrl ?? null;
-      }
-
-      // Mark as paid (atomic: insert paiement + update appel + update repartitions)
-      const { error: rpcError } = await markAsPaidService({
+      // Mark as paid first (creates paiement record)
+      const { paiementId, error: rpcError } = await markAsPaidService({
         appelId: appel.id,
         datePaiement: values.date_paiement,
-        reference: values.reference || undefined,
-        preuvePaiementUrl: preuveUrl || undefined,
       });
 
       if (rpcError) {
         toast.error(rpcError.message || tc('error'));
         return;
+      }
+
+      // Upload proof file if provided (paiement now exists)
+      if (proofFile && paiementId && coproprieteId) {
+        const { error: proofError } = await uploadProof({ paiementId, coproId: coproprieteId, file: proofFile });
+        if (proofError) {
+          toast.error(proofError.message);
+          // Payment was already marked as paid, so continue
+        }
       }
 
       if (coproprieteId) {
@@ -130,14 +124,12 @@ export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess,
         if (isOpen) {
           reset({
             date_paiement: new Date().toISOString().split('T')[0],
-            reference: '',
           });
           setProofFile(null);
         }
       }}
     >
-      <DialogTrigger render={<span className="inline-flex" />}>
-        {children}
+      <DialogTrigger render={children as React.ReactElement}>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -158,15 +150,6 @@ export function MarkAsPaidDialog({ appel, coproprieteId, memberEmail, onSuccess,
             {errors.date_paiement && (
               <p className="text-sm text-destructive">{errors.date_paiement.message}</p>
             )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="reference">{t('paymentReference')}</Label>
-            <Input
-              id="reference"
-              {...register('reference')}
-              placeholder={t('paymentReference')}
-            />
           </div>
 
           <div className="space-y-2">

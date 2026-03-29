@@ -241,13 +241,29 @@
 
 ---
 
-## Epic 5 : Dashboards
+## Epic 5 : Dashboards (V2 — Solde, Transactions, Year Navigation)
 
-### US-5.1 : Dashboard coproprietaire
-- [ ] TC-5.1.1 : Dashboard coproprietaire (stats visibles)
+### US-5.1 : Dashboard — Mon état financier (onglet 1)
+- [ ] TC-DASH-1.1 : Dashboard charge avec stats (solde, en cours, payé)
+- [ ] TC-DASH-1.2 : Transactions récentes visibles
+- [ ] TC-DASH-1.3 : IBAN visible dans onglet "Ma copropriété"
+- [ ] TC-DASH-2.1 : Bouton "Payer" navigue vers paiements
 
-### US-5.2 : Dashboard gestionnaire
-- [ ] TC-5.2.1 : Dashboard gestionnaire (stats visibles)
+### US-5.2 : Dashboard — Ma copropriété (onglet 2)
+- [ ] TC-DASH-3.1 : Soldes membres (1 colonne solde)
+- [ ] TC-DASH-3.2 : Catégories visibles si dépenses existent
+
+### US-5.3 : Navigation annuelle
+- [ ] TC-DASH-4.1 : Flèches ← → changent l'année
+
+### US-SOLDE : Système de solde & dépôts
+- US-SOLDE-1 : Un copropriétaire peut déposer un montant (via page Paiements)
+- US-SOLDE-2 : Le solde est déduit automatiquement lors de la génération de paiement
+- US-SOLDE-3 : Si solde >= part, paiement automatique au trigger validation dépense
+- US-SOLDE-4 : La facture PDF affiche "Solde déduit" et "Montant à payer"
+
+### US-PAY-3 : Onglet "Mes dépôts" dans Paiements
+- Onglet "Mes dépôts" affiche la liste des dépôts du membre
 
 ---
 

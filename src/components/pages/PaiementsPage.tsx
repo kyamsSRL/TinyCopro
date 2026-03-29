@@ -2,12 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
-import { FileDown, Plus, CheckCircle, Paperclip, ExternalLink, Wallet } from 'lucide-react';
+import { FileDown, Plus, CheckCircle, Paperclip, ExternalLink, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { createDepositSchema } from '@/lib/validation';
 import { useCoproContext } from '@/components/copro/CoproContext';
 import { GeneratePaymentForm } from '@/components/paiements/GeneratePaymentForm';
 import { MarkAsPaidDialog } from '@/components/paiements/MarkAsPaidDialog';
@@ -25,10 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { uploadProof, listAppels, createDeposit } from '@/services/paiement';
-import { useAuth } from '@/hooks/useAuth';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { uploadProof, listAppels, deleteProof } from '@/services/paiement';
+import { getChargesConfig, getChargesMembres, markChargePaid } from '@/services/charge';
 import type { Tables, Enums } from '@/types/database.types';
 
 type AppelPaiement = Tables<'appels_paiement'>;
@@ -45,21 +39,24 @@ type AppelWithMember = AppelPaiement & {
   }[];
 };
 
+
 export function PaiementsPageContent() {
   const t = useTranslations('paiements');
   const tc = useTranslations('common');
   const { copro, currentMembre, isGestionnaire } = useCoproContext();
 
+  const tCharges = useTranslations('charges');
   const [myAppels, setMyAppels] = useState<AppelWithMember[]>([]);
   const [allAppels, setAllAppels] = useState<AppelWithMember[]>([]);
+  const [myCharges, setMyCharges] = useState<any[]>([]);
+  const [chargesConfig, setChargesConfig] = useState<{ delta: number; postes: any[] } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('my');
   const [generateOpen, setGenerateOpen] = useState(false);
-  const [depositOpen, setDepositOpen] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
   const [selectedAppel, setSelectedAppel] = useState<AppelWithMember | null>(null);
   const [selectedQrUrl, setSelectedQrUrl] = useState<string | null>(null);
-  const [isDepositing, setIsDepositing] = useState(false);
 
   // Generate QR when a payment is selected
   useEffect(() => {
@@ -77,15 +74,6 @@ export function PaiementsPageContent() {
       .catch(() => setSelectedQrUrl(null));
   }, [selectedAppel, copro]);
 
-  const tv = useTranslations('validation');
-  const depositSchema = createDepositSchema(tv);
-  type DepositFormValues = z.infer<typeof depositSchema>;
-
-  const depositForm = useForm<DepositFormValues>({
-    resolver: zodResolver(depositSchema),
-    defaultValues: { montant: '', reference: '', date_depot: new Date().toISOString().split('T')[0] },
-  });
-
   // Auto-open generate dialog if ?generate=true
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -93,20 +81,6 @@ export function PaiementsPageContent() {
       if (params.get('generate') === 'true') setGenerateOpen(true);
     }
   }, []);
-
-  const handleDeposit = async (values: DepositFormValues) => {
-    if (!copro) return;
-    const montant = parseFloat(values.montant);
-    if (isNaN(montant) || montant <= 0) return;
-    setIsDepositing(true);
-    const { error } = await createDeposit({ coproId: copro.id, montant, reference: values.reference, date: values.date_depot });
-    setIsDepositing(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success(t('depositSuccess'));
-    setDepositOpen(false);
-    depositForm.reset();
-    fetchAppels();
-  };
 
   const handleUploadProof = async (paiementId: string, file: File) => {
     if (!copro) return;
@@ -123,16 +97,21 @@ export function PaiementsPageContent() {
       return;
     }
     setUploadingProofId(null);
-    setSelectedAppel(null);
-    fetchAppels();
+    await refreshAppels();
   };
 
   const fetchAppels = useCallback(async () => {
     if (!copro || !currentMembre) return;
     setLoading(true);
 
-    const { data: myData } = await listAppels(copro.id, currentMembre.id);
-    if (myData) setMyAppels(myData as unknown as AppelWithMember[]);
+    const [myResult, chargesResult, configResult] = await Promise.all([
+      listAppels(copro.id, currentMembre.id),
+      isGestionnaire ? getChargesMembres(copro.id) : Promise.resolve({ data: null, error: null }),
+      getChargesConfig(copro.id),
+    ]);
+    if (myResult.data) setMyAppels(myResult.data as unknown as AppelWithMember[]);
+    if (chargesResult.data) setMyCharges(chargesResult.data);
+    if (configResult.data) setChargesConfig(configResult.data);
 
     if (isGestionnaire) {
       const { data: allData } = await listAppels(copro.id);
@@ -153,7 +132,7 @@ export function PaiementsPageContent() {
       case 'en_cours_paiement':
         return <Badge variant="secondary">{t('confirmPayment')}</Badge>;
       case 'paye':
-        return <Badge variant="default">{t('markAsPaid')}</Badge>;
+        return <Badge variant="success">{t('paye')}</Badge>;
       default:
         return <Badge variant="outline">{statut}</Badge>;
     }
@@ -169,62 +148,217 @@ export function PaiementsPageContent() {
     try {
       const { data: pdfData } = await getPaymentPdfData(appel.id);
       if (pdfData) {
-        const blob = await generatePaymentPdf({ ...pdfData, currency: copro.devise, bic: copro.bic ?? '' });
+        // Detect charge payment and add provision
+        const isCharge = appel.appel_repartitions.length > 0 &&
+          appel.appel_repartitions.every((ar: any) => ar.repartitions?.depenses?.is_charge === true);
+        const provision = isCharge && chargesConfig && chargesConfig.delta > 0
+          ? {
+              montant_total: chargesConfig.delta,
+              montant_copro: Math.round(chargesConfig.delta * (currentMembre?.milliemes ?? 0) / 1000 * 100) / 100,
+            }
+          : undefined;
+        const blob = await generatePaymentPdf({ ...pdfData, solde_deduit: pdfData.solde_deduit ?? 0, provision, currency: copro.devise, bic: copro.bic ?? '' });
         downloadBlob(blob, `${appel.reference}.pdf`);
       }
     } catch { /* PDF error */ } finally { setDownloadingId(null); }
   };
 
-  const handleGenerateSuccess = () => { setGenerateOpen(false); fetchAppels(); };
+  const refreshAppels = useCallback(async () => {
+    await fetchAppels();
+    // Re-read state after fetch to update selectedAppel
+    // We need to refetch and find the updated appel
+    if (!copro || !currentMembre) return;
+    const { data: myData } = await listAppels(copro.id, currentMembre.id);
+    if (myData && selectedAppel) {
+      const all = myData as unknown as AppelWithMember[];
+      const updated = all.find(a => a.id === selectedAppel.id);
+      setSelectedAppel(updated || null);
+    }
+  }, [fetchAppels, copro, currentMembre, selectedAppel]);
+
+  const handleGenerateSuccess = async (appelId: string) => {
+    setGenerateOpen(false);
+    await fetchAppels();
+    // Open the detail popup for the newly created appel
+    if (!copro || !currentMembre) return;
+    const { data: myData } = await listAppels(copro.id, currentMembre.id);
+    if (myData) {
+      const newAppel = (myData as unknown as AppelWithMember[]).find(a => a.id === appelId);
+      if (newAppel) setSelectedAppel(newAppel);
+    }
+  };
 
   const renderActions = (appel: AppelWithMember) => {
     const paiement = appel.paiements?.[0];
     const preuveUrl = paiement?.preuve_paiement_url;
     return (
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Button variant="ghost" size="sm" onClick={() => handleDownloadPdf(appel)} disabled={downloadingId === appel.id}>
           <FileDown className="h-4 w-4 mr-1" />
           {t('downloadPdf')}
         </Button>
         {isGestionnaire && appel.statut !== 'paye' && (
-          <MarkAsPaidDialog appel={appel} coproprieteId={copro?.id} memberEmail={appel.membres?.profiles?.email} onSuccess={fetchAppels}>
-            <Button variant="outline" size="sm">
+          <MarkAsPaidDialog appel={appel} coproprieteId={copro?.id} memberEmail={appel.membres?.profiles?.email} onSuccess={refreshAppels}>
+            <Button size="sm">
               <CheckCircle className="h-4 w-4 mr-1" />
               {t('markAsPaid')}
             </Button>
           </MarkAsPaidDialog>
         )}
-        {appel.statut === 'paye' && preuveUrl && (
-          <a href={preuveUrl} target="_blank" rel="noopener noreferrer">
-            <Button variant="ghost" size="sm">
-              <ExternalLink className="h-4 w-4 mr-1" />
-              {t('proofOfPayment')}
-            </Button>
-          </a>
+        {appel.statut === 'paye' && paiement && (
+          preuveUrl ? (
+            <div className="inline-flex items-center gap-1.5 border rounded-md px-2 py-1">
+              <a
+                href={preuveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs hover:text-primary transition-colors"
+              >
+                <FileDown className="h-3.5 w-3.5 shrink-0" />
+                <span>{t('proof')}</span>
+              </a>
+              <button
+                className="text-muted-foreground hover:text-destructive shrink-0"
+                onClick={async () => {
+                  await deleteProof(paiement.id);
+                  await refreshAppels();
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                id={`proof-${paiement.id}`}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUploadProof(paiement.id, file);
+                  e.target.value = '';
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={uploadingProofId === paiement.id}
+                onClick={() => document.getElementById(`proof-${paiement.id}`)?.click()}
+              >
+                <Paperclip className="h-4 w-4 mr-1" />
+                {uploadingProofId === paiement.id ? '...' : t('addProof')}
+              </Button>
+            </>
+          )
         )}
-        {appel.statut === 'paye' && !preuveUrl && paiement && (
-          <>
-            <input
-              id={`proof-${paiement.id}`}
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleUploadProof(paiement.id, file);
-                e.target.value = '';
-              }}
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={uploadingProofId === paiement.id}
-              onClick={() => document.getElementById(`proof-${paiement.id}`)?.click()}
-            >
-              <Paperclip className="h-4 w-4 mr-1" />
-              {uploadingProofId === paiement.id ? '...' : t('addProof')}
-            </Button>
-          </>
+      </div>
+    );
+  };
+
+  const handleMarkChargePaid = async (chargeId: string) => {
+    const { error } = await markChargePaid(chargeId);
+    if (error) { toast.error(error.message); return; }
+    toast.success(tc('success'));
+    fetchAppels();
+  };
+
+  const renderChargesTab = () => {
+    const milliemes = currentMembre?.milliemes ?? 0;
+    if (!chargesConfig || chargesConfig.postes.length === 0) {
+      return <div className="text-center py-12 text-muted-foreground">{tCharges('noCharges')}</div>;
+    }
+    const totalPostes = chargesConfig.postes.reduce((s: number, p: any) => s + p.montant, 0);
+    const totalCopro = totalPostes + chargesConfig.delta;
+    const myShare = Math.round(totalCopro * milliemes / 1000 * 100) / 100;
+    const myDelta = Math.round(chargesConfig.delta * milliemes / 1000 * 100) / 100;
+
+    return (
+      <div className="space-y-4">
+        {/* Summary */}
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="border rounded-lg p-4">
+            <p className="text-sm text-muted-foreground">{tCharges('total')}</p>
+            <p className="text-xl font-bold">{totalCopro.toFixed(2)} {copro?.devise}</p>
+          </div>
+          <div className="border rounded-lg p-4">
+            <p className="text-sm text-muted-foreground">{tCharges('myShare')}</p>
+            <p className="text-xl font-bold">{myShare.toFixed(2)} {copro?.devise}</p>
+          </div>
+        </div>
+
+        {/* Postes detail */}
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-xs text-muted-foreground">
+              <th className="pb-2 font-medium">{tCharges('libelle')}</th>
+              <th className="pb-2 font-medium">{tCharges('frequence')}</th>
+              <th className="pb-2 font-medium text-right">{tCharges('total')}</th>
+              <th className="pb-2 font-medium text-right">{tCharges('myShare')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {chargesConfig.postes.map((p: any) => (
+              <tr key={p.id} className="border-b">
+                <td className="py-2">{p.libelle}</td>
+                <td className="py-2 text-muted-foreground">{tCharges(p.frequence)}</td>
+                <td className="py-2 text-right">{p.montant.toFixed(2)} {copro?.devise}</td>
+                <td className="py-2 text-right">{(Math.round(p.montant * milliemes / 1000 * 100) / 100).toFixed(2)} {copro?.devise}</td>
+              </tr>
+            ))}
+            {chargesConfig.delta > 0 && (
+              <tr className="border-b bg-muted/30">
+                <td className="py-2 font-medium" colSpan={2}>{tCharges('delta')}</td>
+                <td className="py-2 text-right">{chargesConfig.delta.toFixed(2)} {copro?.devise}</td>
+                <td className="py-2 text-right">{myDelta.toFixed(2)} {copro?.devise}</td>
+              </tr>
+            )}
+            <tr className="border-t-2">
+              <td className="py-2 font-bold" colSpan={2}>{tCharges('total')}</td>
+              <td className="py-2 text-right font-bold">{totalCopro.toFixed(2)} {copro?.devise}</td>
+              <td className="py-2 text-right font-bold">{myShare.toFixed(2)} {copro?.devise}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Gestionnaire: charges_membres list with mark as paid */}
+        {isGestionnaire && myCharges.length > 0 && (
+          <div className="space-y-2 mt-4">
+            <h3 className="text-sm font-bold">{tCharges('title')}</h3>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-muted-foreground">
+                  <th className="pb-2 font-medium">Membre</th>
+                  <th className="pb-2 font-medium">Date</th>
+                  <th className="pb-2 font-medium text-right">{tCharges('montant')}</th>
+                  <th className="pb-2 font-medium text-right">Statut</th>
+                  <th className="pb-2 font-medium text-right"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {myCharges.map((ch: any) => (
+                  <tr key={ch.id} className="border-b">
+                    <td className="py-2">{ch.membre?.profiles?.prenom} {ch.membre?.profiles?.nom}</td>
+                    <td className="py-2 text-muted-foreground">{new Date(ch.date_charge).toLocaleDateString()}</td>
+                    <td className="py-2 text-right font-medium">{ch.montant.toFixed(2)} {copro?.devise}</td>
+                    <td className="py-2 text-right">
+                      <Badge variant={ch.statut === 'paye' ? 'success' : 'secondary'}>
+                        {ch.statut === 'paye' ? tCharges('paye') : tCharges('enAttente')}
+                      </Badge>
+                    </td>
+                    <td className="py-2 text-right">
+                      {ch.statut !== 'paye' && (
+                        <Button size="sm" onClick={() => handleMarkChargePaid(ch.id)}>
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          {tCharges('markPaid')}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     );
@@ -235,27 +369,80 @@ export function PaiementsPageContent() {
       return <div className="text-center py-12 text-muted-foreground">{t('noPaiements')}</div>;
     }
     return (
-      <div className="grid gap-2 md:grid-cols-2">
-        {appels.map(appel => (
-          <div
-            key={appel.id}
-            className="border rounded-lg p-3 cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors"
-            onClick={() => setSelectedAppel(appel)}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-medium text-sm truncate">{appel.reference}</span>
-              {getStatusBadge(appel.statut)}
+      <>
+        {/* Desktop table */}
+        <div className="hidden md:block">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs text-muted-foreground">
+                <th className="pb-2 font-medium">{t('paymentReference')}</th>
+                {showMember && <th className="pb-2 font-medium">Membre</th>}
+                <th className="pb-2 font-medium">{t('paidDate')}</th>
+                <th className="pb-2 font-medium text-right">{t('totalToPay')}</th>
+                <th className="pb-2 font-medium text-right">{t('history')}</th>
+                <th className="pb-2 font-medium text-right"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {appels.map(appel => (
+                <tr
+                  key={appel.id}
+                  className="border-b hover:bg-muted/50 cursor-pointer transition-colors"
+                  onClick={() => setSelectedAppel(appel)}
+                >
+                  <td className="py-2.5 font-medium">{appel.reference}</td>
+                  {showMember && <td className="py-2.5 text-muted-foreground">{getMemberName(appel)}</td>}
+                  <td className="py-2.5 text-muted-foreground">{new Date(appel.created_at).toLocaleDateString()}</td>
+                  <td className="py-2.5 text-right font-medium">{appel.montant_total.toFixed(2)} {copro?.devise}</td>
+                  <td className="py-2.5 text-right">{getStatusBadge(appel.statut)}</td>
+                  <td className="py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                    {isGestionnaire && appel.statut !== 'paye' && (
+                      <MarkAsPaidDialog appel={appel} coproprieteId={copro?.id} memberEmail={appel.membres?.profiles?.email} onSuccess={refreshAppels}>
+                        <Button size="sm">
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          {t('markAsPaid')}
+                        </Button>
+                      </MarkAsPaidDialog>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {/* Mobile cards */}
+        <div className="md:hidden grid gap-2">
+          {appels.map(appel => (
+            <div
+              key={appel.id}
+              className="border rounded-lg p-3 cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors"
+              onClick={() => setSelectedAppel(appel)}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-sm truncate">{appel.reference}</span>
+                {getStatusBadge(appel.statut)}
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs text-muted-foreground">
+                  {showMember && `${getMemberName(appel)} · `}
+                  {new Date(appel.created_at).toLocaleDateString()}
+                </span>
+                <span className="text-sm font-medium">{appel.montant_total.toFixed(2)} {copro?.devise}</span>
+              </div>
+              {isGestionnaire && appel.statut !== 'paye' && (
+                <div className="mt-2 flex justify-center" onClick={(e) => e.stopPropagation()}>
+                  <MarkAsPaidDialog appel={appel} coproprieteId={copro?.id} memberEmail={appel.membres?.profiles?.email} onSuccess={refreshAppels}>
+                    <Button size="sm">
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      {t('markAsPaid')}
+                    </Button>
+                  </MarkAsPaidDialog>
+                </div>
+              )}
             </div>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs text-muted-foreground">
-                {showMember && `${getMemberName(appel)} · `}
-                {new Date(appel.created_at).toLocaleDateString()}
-              </span>
-              <span className="text-sm font-medium">{appel.montant_total.toFixed(2)} {copro?.devise}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </>
     );
   };
 
@@ -269,8 +456,16 @@ export function PaiementsPageContent() {
 
   return (
     <div className="container mx-auto max-w-5xl px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">{t('title')}</h1>
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-2xl font-bold">{t('title')}</h1>
+          {currentMembre && (
+            <div className="text-sm text-muted-foreground">
+              {t('availableBalance')} : <span className="font-bold text-foreground">{(currentMembre.solde ?? 0).toFixed(2)} {copro?.devise}</span>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
         <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
           <DialogTrigger
             render={
@@ -285,88 +480,83 @@ export function PaiementsPageContent() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={depositOpen} onOpenChange={setDepositOpen}>
-          <DialogTrigger
-            render={
-              <Button variant="outline">
-                <Wallet className="mr-1.5" />
-                {t('deposit')}
-              </Button>
-            }
-          />
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>{t('deposit')}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={depositForm.handleSubmit(handleDeposit)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="deposit-montant">{t('depositAmount')} *</Label>
-                <Input id="deposit-montant" type="number" step="0.01" min="0.01" {...depositForm.register('montant')} />
-                {depositForm.formState.errors.montant && (
-                  <p className="text-sm text-destructive">{depositForm.formState.errors.montant.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="deposit-ref">{t('paymentReference')}</Label>
-                <Input id="deposit-ref" {...depositForm.register('reference')} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="deposit-date">{t('depositDate')} *</Label>
-                <Input id="deposit-date" type="date" {...depositForm.register('date_depot')} />
-                {depositForm.formState.errors.date_depot && (
-                  <p className="text-sm text-destructive">{depositForm.formState.errors.date_depot.message}</p>
-                )}
-              </div>
-              <Button type="submit" disabled={isDepositing} className="w-full">
-                {isDepositing ? '...' : t('deposit')}
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        </div>
       </div>
 
-      {isGestionnaire ? (
-        <Tabs defaultValue="my">
-          <TabsList>
-            <TabsTrigger value="my">{t('history')}</TabsTrigger>
-            <TabsTrigger value="all">{t('title')}</TabsTrigger>
-          </TabsList>
-          <TabsContent value="my" className="mt-4">
-            {renderAppelsList(myAppels, false)}
-          </TabsContent>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="w-full">
+          <TabsTrigger value="my">{t('myPayments')}</TabsTrigger>
+          <TabsTrigger value="deposits">{t('myDeposits')}</TabsTrigger>
+          {isGestionnaire && <TabsTrigger value="all">{t('allPayments')}</TabsTrigger>}
+        </TabsList>
+        <TabsContent value="my" className="mt-4">
+          {renderAppelsList(myAppels, false)}
+        </TabsContent>
+        <TabsContent value="deposits" className="mt-4">
+          {renderChargesTab()}
+        </TabsContent>
+        {isGestionnaire && (
           <TabsContent value="all" className="mt-4">
-            {renderAppelsList(allAppels, true)}
+            {renderAppelsList(allAppels.filter(a => a.membre_id !== currentMembre?.id), true)}
           </TabsContent>
-        </Tabs>
-      ) : (
-        <div>{renderAppelsList(myAppels, false)}</div>
-      )}
+        )}
+      </Tabs>
 
       <Dialog open={!!selectedAppel} onOpenChange={(open) => { if (!open) setSelectedAppel(null); }}>
         <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-          {selectedAppel && (
+          {selectedAppel && (() => {
+            const isChargePayment = selectedAppel.appel_repartitions.length > 0 &&
+              selectedAppel.appel_repartitions.every((ar: any) => ar.repartitions?.depenses?.is_charge === true);
+            const fullAmount = isChargePayment
+              ? selectedAppel.appel_repartitions.reduce((s: number, ar: any) => s + (ar.repartitions.montant_override ?? ar.repartitions.montant_du), 0)
+              : selectedAppel.montant_total;
+            const milliemes = currentMembre?.milliemes ?? 0;
+            const deltaTotal = chargesConfig?.delta ?? 0;
+            const myProvision = Math.round(deltaTotal * milliemes / 1000 * 100) / 100;
+
+            return (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center justify-between gap-2">
-                  <span>{selectedAppel.reference}</span>
-                  <span className="text-base">{selectedAppel.montant_total.toFixed(2)} {copro?.devise}</span>
-                </DialogTitle>
+                <DialogTitle>&nbsp;</DialogTitle>
               </DialogHeader>
+              <div className="flex items-center justify-between gap-2 -mt-2">
+                <span className="text-lg font-bold">{selectedAppel.reference}</span>
+                <span className="text-lg font-bold shrink-0">
+                  {isChargePayment ? (fullAmount + myProvision).toFixed(2) : selectedAppel.montant_total.toFixed(2)} {copro?.devise}
+                </span>
+              </div>
               <div className="space-y-4">
                 <div className="flex flex-wrap gap-2">
                   {getStatusBadge(selectedAppel.statut)}
+                  {isChargePayment && <Badge variant="outline">{tCharges('title')}</Badge>}
                   <Badge variant="outline">{new Date(selectedAppel.created_at).toLocaleDateString()}</Badge>
                   <Badge variant="outline">{getMemberName(selectedAppel)}</Badge>
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground">{t('selectDepenses')}</p>
-                  {selectedAppel.appel_repartitions.map(ar => (
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {isChargePayment ? tCharges('title') : t('depensesConcernees')}
+                  </p>
+                  {selectedAppel.appel_repartitions.map((ar: any) => (
                     <div key={ar.repartitions.id} className="flex justify-between py-1.5 border-b border-dashed last:border-0 text-sm">
                       <span>{ar.repartitions.depenses.libelle}</span>
-                      <span className="font-medium">{(ar.repartitions.montant_override ?? ar.repartitions.montant_du).toFixed(2)} {copro?.devise}</span>
+                      <div className="text-right">
+                        {isChargePayment && (
+                          <span className="text-xs text-muted-foreground mr-2">{ar.repartitions.depenses.montant_total?.toFixed(2)} {copro?.devise}</span>
+                        )}
+                        <span className="font-medium">{(ar.repartitions.montant_override ?? ar.repartitions.montant_du).toFixed(2)} {copro?.devise}</span>
+                      </div>
                     </div>
                   ))}
+                  {isChargePayment && myProvision > 0 && (
+                    <div className="flex justify-between py-1.5 border-b border-dashed text-sm bg-muted/30 px-1 rounded">
+                      <span className="font-medium">{tCharges('delta')}</span>
+                      <div className="text-right">
+                        <span className="text-xs text-muted-foreground mr-2">{deltaTotal.toFixed(2)} {copro?.devise}</span>
+                        <span className="font-medium">{myProvision.toFixed(2)} {copro?.devise}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Modalités de paiement */}
@@ -394,7 +584,8 @@ export function PaiementsPageContent() {
                 {renderActions(selectedAppel)}
               </div>
             </>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

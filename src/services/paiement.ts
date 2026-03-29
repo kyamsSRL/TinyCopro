@@ -76,9 +76,20 @@ export async function getPaymentPdfData(appelId: string) {
     reference: string;
     date: string;
     montant_copro: number;
+    solde_deduit: number;
     depenses: { libelle: string; montant_total: number; montant_copro: number }[];
     total_depenses: number;
   } | null, error };
+}
+
+export async function deleteProof(paiementId: string) {
+  const { error } = await supabase.rpc('delete_proof', { p_paiement_id: paiementId });
+  return { error };
+}
+
+export async function getMyDeposits(coproId: string) {
+  const { data, error } = await supabase.rpc('get_my_deposits', { p_copro_id: coproId });
+  return { data: data as { id: string; montant: number; date_depot: string; reference: string | null; created_at: string }[] | null, error };
 }
 
 export async function listAppels(coproId: string, membreId?: string) {

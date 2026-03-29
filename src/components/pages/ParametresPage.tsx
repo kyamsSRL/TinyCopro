@@ -3,8 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { CalendarDays, Download, Plus, Lock } from 'lucide-react';
+import { CalendarDays, Download, Plus, Lock, Trash2 } from 'lucide-react';
 import { closeExercice as closeExerciceService, createExercice as createExerciceService, listExercices as listExercicesService, getExportData } from '@/services/exercice';
+import { getChargesConfig, addChargeConfig, deleteChargeConfig, updateDeltaCharges } from '@/services/charge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useCoproContext } from '@/components/copro/CoproContext';
 import { logAudit } from '@/lib/audit';
 import { AuditLog } from '@/components/audit/AuditLog';
@@ -43,12 +47,19 @@ export function ParametresPageContent() {
   const { user } = useAuth();
   const { copro, isGestionnaire, membres, exercice, refetch } = useCoproContext();
 
+  const tCharges = useTranslations('charges');
   const [exercices, setExercices] = useState<Exercice[]>([]);
   const [loading, setLoading] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [chargesConfig, setChargesConfig] = useState<{ delta: number; postes: any[] } | null>(null);
+  const [newChargeLibelle, setNewChargeLibelle] = useState('');
+  const [newChargeMontant, setNewChargeMontant] = useState('');
+  const [newChargeFrequence, setNewChargeFrequence] = useState('mensuelle');
+  const [deltaInput, setDeltaInput] = useState('');
+  const [isAddingCharge, setIsAddingCharge] = useState(false);
 
   const fetchExercices = useCallback(async () => {
     if (!copro) return;
@@ -60,9 +71,45 @@ export function ParametresPageContent() {
     setLoading(false);
   }, [copro]);
 
+  const fetchChargesConfig = useCallback(async () => {
+    if (!copro) return;
+    const { data } = await getChargesConfig(copro.id);
+    if (data) {
+      setChargesConfig(data);
+      setDeltaInput(String(data.delta));
+    }
+  }, [copro]);
+
   useEffect(() => {
     fetchExercices();
-  }, [fetchExercices]);
+    fetchChargesConfig();
+  }, [fetchExercices, fetchChargesConfig]);
+
+  const handleAddCharge = async () => {
+    if (!copro || !newChargeLibelle.trim() || !newChargeMontant) return;
+    setIsAddingCharge(true);
+    const { error } = await addChargeConfig(copro.id, newChargeLibelle.trim(), parseFloat(newChargeMontant), newChargeFrequence);
+    setIsAddingCharge(false);
+    if (error) { toast.error(error.message); return; }
+    setNewChargeLibelle(''); setNewChargeMontant(''); setNewChargeFrequence('mensuelle');
+    fetchChargesConfig();
+  };
+
+  const handleDeleteCharge = async (chargeId: string) => {
+    const { error } = await deleteChargeConfig(chargeId);
+    if (error) { toast.error(error.message); return; }
+    fetchChargesConfig();
+  };
+
+  const handleUpdateDelta = async () => {
+    if (!copro) return;
+    const val = parseFloat(deltaInput);
+    if (isNaN(val) || val < 0) return;
+    const { error } = await updateDeltaCharges(copro.id, val);
+    if (error) { toast.error(error.message); return; }
+    toast.success(tc('success'));
+    fetchChargesConfig();
+  };
 
   const handleCloseExercice = async () => {
     if (!copro || !exercice) return;
@@ -288,6 +335,110 @@ export function ParametresPageContent() {
             <Button onClick={handleCreateExercice} disabled={isCreating}>
               <Plus className="mr-1.5" />
               {isCreating ? '...' : t('create')}
+            </Button>
+          </div>
+        </>
+      )}
+
+      {isGestionnaire && copro && chargesConfig && (
+        <>
+          <Separator />
+          <h2 className="text-xl font-semibold">{tCharges('config')}</h2>
+
+          {/* Delta */}
+          <div className="flex items-center gap-2">
+            <Label className="shrink-0">{tCharges('delta')}</Label>
+            <Input type="number" step="0.01" min="0" value={deltaInput} onChange={(e) => setDeltaInput(e.target.value)} className="w-32" />
+            <span className="text-sm text-muted-foreground">{copro.devise}</span>
+            <Button variant="outline" size="sm" onClick={handleUpdateDelta}>{tc('save')}</Button>
+          </div>
+
+          {/* Postes list */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium">{tCharges('postes')}</h3>
+            {chargesConfig.postes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{tCharges('noCharges')}</p>
+            ) : (
+              <div className="hidden md:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs text-muted-foreground">
+                      <th className="pb-2 font-medium">{tCharges('libelle')}</th>
+                      <th className="pb-2 font-medium text-right">{tCharges('montant')}</th>
+                      <th className="pb-2 font-medium">{tCharges('frequence')}</th>
+                      <th className="pb-2 font-medium"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chargesConfig.postes.map((p: any) => (
+                      <tr key={p.id} className="border-b">
+                        <td className="py-2">{p.libelle}</td>
+                        <td className="py-2 text-right font-medium">{p.montant.toFixed(2)} {copro.devise}</td>
+                        <td className="py-2">{tCharges(p.frequence)}</td>
+                        <td className="py-2 text-right">
+                          <button className="text-muted-foreground hover:text-destructive" onClick={() => handleDeleteCharge(p.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {/* Mobile cards for postes */}
+            {chargesConfig.postes.length > 0 && (
+              <div className="md:hidden space-y-2">
+                {chargesConfig.postes.map((p: any) => (
+                  <div key={p.id} className="flex items-center justify-between border rounded-lg p-2">
+                    <div>
+                      <span className="text-sm font-medium">{p.libelle}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{tCharges(p.frequence)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{p.montant.toFixed(2)} {copro.devise}</span>
+                      <button className="text-muted-foreground hover:text-destructive" onClick={() => handleDeleteCharge(p.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Total */}
+            <div className="flex items-center justify-between pt-2 border-t text-sm">
+              <span className="font-medium">{tCharges('total')}</span>
+              <span className="font-bold">
+                {(chargesConfig.postes.reduce((s: number, p: any) => s + p.montant, 0) + chargesConfig.delta).toFixed(2)} {copro.devise}
+              </span>
+            </div>
+          </div>
+
+          {/* Add poste form */}
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">{tCharges('libelle')}</Label>
+              <Input value={newChargeLibelle} onChange={(e) => setNewChargeLibelle(e.target.value)} className="w-40" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{tCharges('montant')}</Label>
+              <Input type="number" step="0.01" min="0" value={newChargeMontant} onChange={(e) => setNewChargeMontant(e.target.value)} className="w-24" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{tCharges('frequence')}</Label>
+              <Select value={newChargeFrequence} onValueChange={(v) => setNewChargeFrequence(v ?? 'mensuelle')}>
+                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mensuelle">{tCharges('mensuelle')}</SelectItem>
+                  <SelectItem value="trimestrielle">{tCharges('trimestrielle')}</SelectItem>
+                  <SelectItem value="annuelle">{tCharges('annuelle')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleAddCharge} disabled={isAddingCharge || !newChargeLibelle.trim() || !newChargeMontant}>
+              <Plus className="h-4 w-4 mr-1" />
+              {tCharges('add')}
             </Button>
           </div>
         </>

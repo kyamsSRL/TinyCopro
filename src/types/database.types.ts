@@ -134,6 +134,48 @@ export type Database = {
           },
         ]
       }
+      depense_votes: {
+        Row: {
+          id: string
+          depense_id: string
+          membre_id: string
+          vote: boolean
+          motif_rejet: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          depense_id: string
+          membre_id: string
+          vote: boolean
+          motif_rejet?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          depense_id?: string
+          membre_id?: string
+          vote?: boolean
+          motif_rejet?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "depense_votes_depense_id_fkey"
+            columns: ["depense_id"]
+            isOneToOne: false
+            referencedRelation: "depenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "depense_votes_membre_id_fkey"
+            columns: ["membre_id"]
+            isOneToOne: false
+            referencedRelation: "membres"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       depots: {
         Row: {
           id: string
@@ -227,10 +269,12 @@ export type Database = {
           frequence: Database["public"]["Enums"]["frequence_recurrence"]
           id: string
           is_recurrence_active: boolean
+          is_validated: boolean
           justificatif_urls: string[] | null
           libelle: string
           montant_total: number
           updated_at: string
+          version: number
         }
         Insert: {
           categorie_id?: string | null
@@ -384,6 +428,7 @@ export type Database = {
           is_active: boolean
           milliemes: number
           role: Database["public"]["Enums"]["membre_role"]
+          solde: number
           updated_at: string
           user_id: string | null
         }
@@ -579,23 +624,35 @@ export type Database = {
       close_exercice: { Args: { p_copro_id: string; p_exercice_id: string }; Returns: string }
       create_exercice: { Args: { p_copro_id: string; p_annee: number }; Returns: string }
       create_deposit: { Args: { p_copro_id: string; p_montant: number; p_reference: string | null; p_date: string }; Returns: string }
-      get_dashboard_stats: { Args: { p_copro_id: string }; Returns: unknown }
+      get_dashboard_stats: { Args: { p_copro_id: string; p_exercice_id: string | null }; Returns: unknown }
       create_copro_with_member: { Args: { p_nom: string; p_adresse: string; p_numero_societe: string; p_iban: string; p_bic: string | null; p_milliemes: number }; Returns: string }
-      create_depense_with_repartitions: { Args: { p_copro_id: string; p_exercice_id: string; p_libelle: string; p_montant_total: number; p_date_depense: string; p_description: string | null; p_categorie_id: string | null; p_frequence: string; p_justificatif_urls: string[] | null }; Returns: string }
+      create_depense_with_repartitions: { Args: { p_copro_id: string; p_exercice_id: string; p_libelle: string; p_montant_total: number; p_date_depense: string; p_description: string | null; p_categorie_id: string | null; p_frequence: string; p_justificatif_urls: string[] | null; p_auto_accept: boolean }; Returns: string }
       create_invitation_with_repartitions: { Args: { p_copro_id: string; p_alias: string; p_email: string | null; p_date_adhesion: string }; Returns: string }
+      add_depense_document: { Args: { p_depense_id: string; p_url: string; p_filename: string }; Returns: string }
+      get_charges_config: { Args: { p_copro_id: string }; Returns: unknown }
+      add_charge_config: { Args: { p_copro_id: string; p_libelle: string; p_montant: number; p_frequence: string }; Returns: string }
+      update_charge_config: { Args: { p_charge_id: string; p_libelle: string; p_montant: number; p_frequence: string }; Returns: undefined }
+      delete_charge_config: { Args: { p_charge_id: string }; Returns: undefined }
+      update_delta_charges: { Args: { p_copro_id: string; p_delta: number }; Returns: undefined }
+      get_charges_membres: { Args: { p_copro_id: string; p_membre_id: string | null }; Returns: unknown }
+      mark_charge_paid: { Args: { p_charge_id: string }; Returns: undefined }
+      generate_monthly_charges: { Args: { p_copro_id: string; p_month: number; p_year: number }; Returns: undefined }
+      remove_depense_document: { Args: { p_document_id: string }; Returns: undefined }
       delete_category: { Args: { p_category_id: string }; Returns: undefined }
-      delete_depense: { Args: { p_depense_id: string }; Returns: undefined }
+      delete_depense: { Args: { p_depense_id: string; p_version: number }; Returns: undefined }
+      delete_proof: { Args: { p_paiement_id: string }; Returns: undefined }
       generate_payment: { Args: { p_copro_id: string; p_membre_id: string; p_repartition_ids: string[] }; Returns: unknown }
       get_appels: { Args: { p_copro_id: string; p_membre_id: string | null }; Returns: unknown }
       get_exercices: { Args: { p_copro_id: string }; Returns: unknown }
       get_export_data: { Args: { p_copro_id: string; p_exercice_id: string }; Returns: unknown }
       get_member_emails: { Args: { p_copro_id: string }; Returns: unknown }
+      get_my_deposits: { Args: { p_copro_id: string }; Returns: unknown }
       get_payment_pdf_data: { Args: { p_appel_id: string }; Returns: unknown }
       upload_signature: { Args: { p_url: string }; Returns: undefined }
       get_repartitions_en_cours: { Args: { p_copro_id: string }; Returns: unknown }
       get_categories: { Args: { p_copro_id: string }; Returns: unknown }
       get_copro_detail: { Args: { p_copro_id: string }; Returns: unknown }
-      get_depenses: { Args: { p_copro_id: string; p_exercice_id: string }; Returns: unknown }
+      get_depenses: { Args: { p_copro_id: string; p_exercice_id: string; p_categorie_id: string | null; p_statut: string | null }; Returns: unknown }
       get_user_copros: { Args: Record<string, never>; Returns: unknown }
       is_gestionnaire_of: { Args: { copro_id: string }; Returns: boolean }
       is_member_of: { Args: { copro_id: string }; Returns: boolean }
@@ -604,9 +661,10 @@ export type Database = {
       regenerate_invitation_code: { Args: { p_membre_id: string }; Returns: string }
       revoke_membre: { Args: { p_membre_id: string }; Returns: undefined }
       transfer_role: { Args: { p_from_membre_id: string; p_to_membre_id: string }; Returns: undefined }
-      update_depense: { Args: { p_depense_id: string; p_libelle: string; p_montant_total: number; p_date_depense: string; p_description: string | null; p_categorie_id: string | null; p_frequence: string }; Returns: string }
+      update_depense: { Args: { p_depense_id: string; p_libelle: string; p_montant_total: number; p_date_depense: string; p_description: string | null; p_categorie_id: string | null; p_frequence: string; p_version: number }; Returns: string }
       update_membre_milliemes: { Args: { p_membre_id: string; p_milliemes: number }; Returns: undefined }
       upload_proof_url: { Args: { p_paiement_id: string; p_url: string }; Returns: undefined }
+      vote_depense: { Args: { p_depense_id: string; p_vote: boolean; p_motif: string | null }; Returns: undefined }
     }
     Enums: {
       frequence_recurrence:

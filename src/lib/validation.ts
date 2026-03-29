@@ -90,7 +90,6 @@ export function createOverrideSchema(v: V) {
 export function createMarkPaidSchema(v: V) {
   return z.object({
     date_paiement: z.string().min(1, v('dateRequired')),
-    reference: z.string().optional(),
   });
 }
 

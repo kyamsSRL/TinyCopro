@@ -222,7 +222,47 @@ export function MembresPageContent() {
       {membres.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">{tc('noResults')}</div>
       ) : (<>
-        <div className="grid gap-2 md:grid-cols-2">
+        {/* Desktop table */}
+        <div className="hidden md:block">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs text-muted-foreground">
+                <th className="pb-2 font-medium">Nom</th>
+                <th className="pb-2 font-medium">{t('alias')}</th>
+                <th className="pb-2 font-medium">{t('role')}</th>
+                <th className="pb-2 font-medium text-right">{t('milliemes')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {membres.map((membre) => {
+                const display = getMemberDisplayName(membre);
+                const placeholder = isPlaceholder(membre);
+                return (
+                  <tr
+                    key={membre.id}
+                    className={`border-b hover:bg-muted/50 cursor-pointer transition-colors ${placeholder ? 'opacity-70' : ''}`}
+                    onClick={() => setSelectedMembre(membre)}
+                  >
+                    <td className="py-2.5 font-medium">
+                      {display.prenom} {display.nom}
+                      {placeholder && <Badge variant="secondary" className="ml-2">{t('enAttente')}</Badge>}
+                    </td>
+                    <td className="py-2.5 text-muted-foreground">{membre.alias || '-'}</td>
+                    <td className="py-2.5">
+                      <Badge variant={membre.role === 'gestionnaire' ? 'success' : 'secondary'}>
+                        {membre.role === 'gestionnaire' ? t('gestionnaire') : t('coproprietaire')}
+                      </Badge>
+                    </td>
+                    <td className="py-2.5 text-right font-medium">{membre.milliemes}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="md:hidden grid gap-2">
           {membres.map((membre) => {
             const display = getMemberDisplayName(membre);
             const placeholder = isPlaceholder(membre);
@@ -239,7 +279,7 @@ export function MembresPageContent() {
                     </span>
                     {placeholder && <Badge variant="secondary">{t('enAttente')}</Badge>}
                   </div>
-                  <Badge variant={membre.role === 'gestionnaire' ? 'default' : 'secondary'}>
+                  <Badge variant={membre.role === 'gestionnaire' ? 'success' : 'secondary'}>
                     {membre.role === 'gestionnaire' ? t('gestionnaire') : t('coproprietaire')}
                   </Badge>
                 </div>
@@ -268,7 +308,7 @@ export function MembresPageContent() {
                   </DialogHeader>
                   <div className="space-y-4">
                     <div className="flex flex-wrap gap-2">
-                      <Badge variant={selectedMembre.role === 'gestionnaire' ? 'default' : 'secondary'}>
+                      <Badge variant={selectedMembre.role === 'gestionnaire' ? 'success' : 'secondary'}>
                         {selectedMembre.role === 'gestionnaire' ? t('gestionnaire') : t('coproprietaire')}
                       </Badge>
                       <Badge variant="outline">{selectedMembre.milliemes} {t('milliemes')}</Badge>

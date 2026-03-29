@@ -55,6 +55,9 @@ export function Header() {
                 </div>
               </div>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => router.push(`/${locale}/copros`)}>
+                {tNav('copros')}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push(`/${locale}/profil`)}>
                 {tNav('profile')}
               </DropdownMenuItem>

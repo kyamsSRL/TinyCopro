@@ -1,18 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { createDepenseSchema } from '@/lib/validation';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import { Paperclip, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { logAudit } from '@/lib/audit';
 import { sendNotification } from '@/lib/notifications';
 import { useCoproContext } from '@/components/copro/CoproContext';
-import { createDepense, updateDepense, listCategories } from '@/services/depense';
+import { createDepense, updateDepense, listCategories, uploadDepenseDocument } from '@/services/depense';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,9 +36,10 @@ type Category = Tables<'categories_depenses'>;
 interface DepenseFormProps {
   onSuccess?: () => void;
   depense?: Tables<'depenses'>;
+  isGestionnaire?: boolean;
 }
 
-export function DepenseForm({ onSuccess, depense }: DepenseFormProps) {
+export function DepenseForm({ onSuccess, depense, isGestionnaire }: DepenseFormProps) {
   const t = useTranslations('depenses');
   const tc = useTranslations('common');
   const tv = useTranslations('validation');
@@ -52,6 +53,9 @@ export function DepenseForm({ onSuccess, depense }: DepenseFormProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(depense?.categorie_id || '');
   const [selectedFrequence, setSelectedFrequence] = useState<string>(depense?.frequence || 'unique');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [autoAccept, setAutoAccept] = useState(true);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -100,6 +104,7 @@ export function DepenseForm({ onSuccess, depense }: DepenseFormProps) {
           description: values.description || undefined,
           categorieId: selectedCategoryId || undefined,
           frequence: selectedFrequence,
+          version: (depense as any).version || 1,
         });
         if (rpcError) { toast.error(rpcError.message || tc('error')); return; }
         depenseId = depense.id;
@@ -114,9 +119,15 @@ export function DepenseForm({ onSuccess, depense }: DepenseFormProps) {
           description: values.description || undefined,
           categorieId: selectedCategoryId || undefined,
           frequence: selectedFrequence,
+          autoAccept: isGestionnaire ? autoAccept : false,
         });
         if (rpcError || !newId) { toast.error(rpcError?.message || tc('error')); return; }
         depenseId = newId;
+
+        // Upload pending files
+        for (const file of pendingFiles) {
+          await uploadDepenseDocument({ depenseId: newId, coproId: copro.id, file });
+        }
       }
 
       logAudit({
@@ -257,6 +268,58 @@ export function DepenseForm({ onSuccess, depense }: DepenseFormProps) {
           />
         </div>
 
+
+        {!depense && (
+          <div className="space-y-2">
+            <Label>{t('documents')}</Label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
+                  if (!allowed.includes(file.type)) { toast.error(t('fileTypeError')); return; }
+                  if (pendingFiles.length >= 3) { toast.error(t('maxDocuments')); return; }
+                  setPendingFiles(prev => [...prev, file]);
+                }
+                e.target.value = '';
+              }}
+            />
+            {pendingFiles.length > 0 && (
+              <div className="space-y-1">
+                {pendingFiles.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm bg-muted/50 rounded px-2 py-1">
+                    <span className="truncate mr-2">{f.name}</span>
+                    <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive shrink-0">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {pendingFiles.length < 3 && (
+              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <Paperclip className="h-4 w-4 mr-1" />
+                {t('addDocument')}
+              </Button>
+            )}
+          </div>
+        )}
+
+        {isGestionnaire && !depense && (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoAccept}
+              onChange={(e) => setAutoAccept(e.target.checked)}
+              className="rounded border-input"
+            />
+            <span className="text-sm">{t('autoAccept')}</span>
+          </label>
+        )}
 
         <DialogFooter>
           <Button type="submit" disabled={isSubmitting}>

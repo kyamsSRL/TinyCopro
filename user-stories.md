@@ -191,6 +191,94 @@
 
 ---
 
+## Epic VOTE : Validation des dépenses par vote (V1.2)
+
+### US-VOTE-1 : Dépense copropriétaire soumise au vote
+**En tant que** copropriétaire,
+**je veux** que ma dépense soit soumise au vote de tous les membres,
+**afin de** garantir l'accord collectif.
+
+**Critères d'acceptation :**
+- Dépense créée par copropriétaire → `is_validated = false`, soumise au vote
+- Dépense créée par gestionnaire → auto-validée
+- Badge "En attente de validation" + compteur votes visible
+
+### US-VOTE-2 : Voter sur une dépense
+**En tant que** membre,
+**je veux** voter (valider ou rejeter) une dépense,
+**afin d'** exprimer mon accord.
+
+**Critères d'acceptation :**
+- Boutons Valider/Rejeter dans le détail
+- Rejet → motif obligatoire
+- Un vote par membre (modifiable)
+- Liste des votes visible par tous
+
+### US-VOTE-3 : Validation unanime
+**En tant que** système,
+**je veux** valider automatiquement quand tous ont voté oui.
+
+**Critères d'acceptation :**
+- Dernier vote positif → `is_validated = true`
+- La dépense entre dans le dashboard et les paiements
+
+### US-VOTE-4 : Exclusion du dashboard et paiements
+**En tant que** membre,
+**je veux** que les dépenses non validées n'impactent pas mes montants.
+
+**Critères d'acceptation :**
+- Dashboard : uniquement dépenses validées
+- Paiements : uniquement répartitions de dépenses validées
+
+---
+
+## Epic STAT : Statuts, versioning et override (V1.2)
+
+### US-STAT-1 : Statuts clairs des dépenses
+**En tant que** membre,
+**je veux** voir le statut de chaque dépense (En attente / En cours / Payé),
+**afin de** savoir où en est chaque charge.
+
+**Critères d'acceptation :**
+- Labels : "En attente" (`en_cours`), "En cours" (`en_cours_paiement`), "Payé" (`paye`)
+- Bouton "Payer" à côté de la répartition du membre connecté si en attente → navigue vers Paiements
+
+### US-STAT-2 : Interdiction de supprimer une dépense en cours ou payée
+**En tant que** système,
+**je veux** empêcher la suppression d'une dépense en paiement ou payée,
+**afin de** garantir l'intégrité.
+
+**Critères d'acceptation :**
+- RPC refuse si répartition en `en_cours_paiement` ou `paye`
+- Bouton Supprimer caché si `can_delete = false`
+
+### US-STAT-3 : Interdiction de modifier une dépense en cours ou payée
+**En tant que** système,
+**je veux** empêcher la modification d'une dépense en paiement ou payée.
+
+**Critères d'acceptation :**
+- RPC refuse si répartition en `en_cours_paiement` ou `paye`
+- Bouton Modifier caché si `can_edit = false`
+
+### US-VER-1 : Versioning optimiste
+**En tant que** système,
+**je veux** un versioning sur les dépenses pour empêcher les modifications concurrentes.
+
+**Critères d'acceptation :**
+- Colonne `version` sur `depenses`, incrémentée à chaque modification
+- RPC vérifie que la version fournie correspond à celle en DB
+- Erreur "Depense has been modified" si conflit
+
+### US-OVR-1 : Override — somme ≤ montant total
+**En tant que** système,
+**je veux** que la somme des overrides ne dépasse pas le montant total.
+
+**Critères d'acceptation :**
+- RPC refuse si `somme_autres + override > montant_total`
+- En dessous est accepté → badge "Partiellement couvert"
+
+---
+
 ## Epic PDF : Document de demande de paiement (V1.2)
 
 ### US-PDF-1 : Format professionnel du PDF
@@ -252,12 +340,27 @@
 - Notification au copropriétaire qu'une invitation a été créée
 - Les dépenses passent au statut "en cours de paiement"
 
-### US-4.3 : Marquer un paiement comme "payé"
-**En tant que** gestionnaire,
-**je veux** marquer un groupe de paiement comme "payé",
-**afin de** confirmer la réception du virement.
+### US-4.3 : Marquer un paiement comme "payé" (V1.2 — élargi)
+**En tant que** membre (gestionnaire ou copropriétaire),
+**je veux** marquer un paiement comme "payé",
+**afin de** confirmer le règlement.
 
 **Critères d'acceptation :**
+- Un copropriétaire peut marquer ses propres appels de paiement comme payés
+- Un gestionnaire peut marquer les appels de tous les membres comme payés
+- Le RPC vérifie côté serveur que l'appelant est autorisé (gestionnaire OU propriétaire de l'appel)
+
+### US-4.5 : Dépense payée seulement si somme = total (V1.2)
+**En tant que** système,
+**je veux** qu'une dépense ne soit "Payé" que si la somme des montants effectifs payés ≥ montant total,
+**afin de** refléter la réalité financière.
+
+**Critères d'acceptation :**
+- Statut "Payé" = toutes répartitions `paye` ET somme effective ≥ montant total
+- Si overrides font que la somme < total, le statut reste "En attente" même si tous ont payé
+- Logique d'affichage côté frontend
+
+**Anciens critères d'acceptation (conservés) :**
 - Seul le gestionnaire peut passer le statut à "payé"
 - Le statut passe de "en cours de paiement" à "payé"
 - Date de paiement enregistrée
